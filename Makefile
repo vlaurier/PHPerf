@@ -2,7 +2,7 @@ COMPOSE := docker compose
 DC_RUN  := $(COMPOSE) run --rm app
 
 .DEFAULT_GOAL := help
-.PHONY: help fix lint vet tidy tests check build shell up down logs clean
+.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules check build shell up down logs clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -20,8 +20,21 @@ vet: ## go vet ./...
 tidy: ## Synchronise go.mod / go.sum avec les imports (dépendances du projet)
 	$(DC_RUN) go mod tidy
 
-tests: ## Tests unitaires avec race detector et couverture
+tests: ## Tests (race + couverture) — un seul package : make tests PKG=./internal/rules/
+ifeq ($(PKG),)
 	$(DC_RUN) go test -race -cover ./...
+else
+	$(DC_RUN) go test -race -cover $(PKG)
+endif
+
+tests-collector: ## Tests du package collector
+	$(DC_RUN) go test -race -cover ./internal/collector/
+
+tests-analyzer: ## Tests du package analyzer
+	$(DC_RUN) go test -race -cover ./internal/analyzer/
+
+tests-rules: ## Tests du package rules
+	$(DC_RUN) go test -race -cover ./internal/rules/
 
 check: ## Tout vérifier d'un coup : lint + vet + tests
 	$(DC_RUN) bash -ec 'golangci-lint fmt --diff && golangci-lint run && go vet ./... && go test -race -cover ./...'

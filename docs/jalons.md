@@ -15,16 +15,16 @@
 |---|---|---|
 | 0 | Environnement dev (Docker, Makefile, lint v2, docs pivot baseline) | ✅ Fait |
 | 1 | Contrat collecteur (`collector.RawProfile`) + normalisation XHProf (`analyzer`) | ✅ Fait |
-| 2 | Moteur de règles YAML (`internal/rules`) | ⬜ À faire |
+| 2 | Moteur de règles YAML (`internal/rules`) | ✅ Fait |
 | 3 | Scoreur de priorité (`internal/scorer`) | ⬜ À faire |
 | 4 | Storage SQLite + baseline CI (`storage`, `phperf-ci`) | ⬜ À faire |
 | 5 | Rapports & UI web (`report`, `ui`, service `web`) | ⬜ À faire |
 
-Qualité actuelle : `make check` vert ; couverture **100 %** sur `collector`
-et `analyzer` ; complexité ≤ 15 vérifiée par `cyclop`.
+Qualité : `make check` vert sur les jalons 0-2 ; couverture **100 %** sur
+`collector`, `analyzer` (constatée) et `rules` (objectif §5 racine) ;
+complexité ≤ 15 vérifiée par `cyclop`.
 
-⚠️ **Le dépôt n'est pas encore un repo git** (`git init` non fait) — aucune
-historisation des changements. À traiter avant le jalon 2 idéalement.
+Repo git initialisé le 22/08/2026 (branche `main`, premier commit `f5f653a`).
 
 ---
 
@@ -124,18 +124,43 @@ doublé (3100 au lieu de 1900). Les tests de non-régression sont en place.
 
 ## Jalons suivants (proposition, à valider avant de coder)
 
-### Jalon 2 — Moteur de règles YAML (`internal/rules`)
+### Jalon 2 — Moteur de règles YAML (`internal/rules`) — LIVRÉ, gates à valider
 
-- Loader `yaml.v3` validé contre `rules.schema.json` (ou struct tags strictes).
-- Type `Finding` : `{RuleID, Node/localisation, Severity, Effort,
-  Controllability, Recommendation}` — **la localisation doit être
-  déterministe** (même entrée → même clé), cf. Q1.
-- Matchers v1 réalistes sur ce que le call graph sait faire :
-  `function_pattern`, `call_count_threshold`, ratios mémoire/appel…
-- ⚠️ Limite connue : le format XHProf **ne porte pas l'information « dans
-  une boucle »**. Les règles `*-in-loop` (network-call-in-loop, n+1)
-  nécessitent soit une heuristique (N appels identiques depuis un même
-  caller), soit un enrichissement de la collecte — cf. Q3.
+Décisions validées avec le pilote (22/08/2026) :
+
+- **Clé stable baseline** (Q1 résolue) : `<RuleID>|<callee>`. Un renommage de
+  méthode produit un « nouveau » finding — limite assumée, comme les chemins
+  de PHPStan.
+- **Règles « *-in-loop »** (Q3 résolue) : heuristique retenue — match si le
+  CT d'une arête caller→callee ≥ N. Aucun profileur ne portera jamais
+  l'info boucle (une boucle n'est pas une fonction) ; l'heuristique est
+  précise en pratique et la recommandation reste pertinente.
+- **duplicated-calculation** : gardée, matcher affaibli (CT seul). Nos
+  backends prévus (XHProf, php-spx, phpspy) n'exposeront pas les arguments ;
+  Xdebug `collect_params` est hors périmètre CI (overhead).
+- **deep-recursion** : écartée — dériver la profondeur du CT serait une
+  approximation. Réintégration possible via un futur backend à traces.
+- Seuils au format `">=N"` uniquement en v1 (`Threshold` custom YAML).
+
+Livré :
+
+- `rule.go` — types du format (`Rule`, `Match`, enums typés, type
+  `Threshold` avec `UnmarshalYAML` strict) ;
+- `loader.go` — `Load(data)` strict : champs inconnus rejetés
+  (`KnownFields`), id unique `^[a-z0-9-]+$`, name/description requis,
+  enums valides, ≥ 1 critère, regexp compilable ;
+- `finding.go` — `Finding{Key, RuleID, Function, Caller, Severity, Effort,
+  Controllability, Recommendation, Evidence}` + `Evidence{CallCount,
+  MemPerCallMB}` ;
+- `engine.go` — interface `Evaluator`, `Engine.Evaluate` :
+  function_pattern sur le callee (racine exclue), call_count **par arête**,
+  mémoire par appel **par callee** (ΣMU/ΣCT), findings dédoublonnés par clé
+  stable, `Caller` = site dominant (max CT), résultat déterministe ;
+- `proto/rules.example.yaml` réécrit (4 règles honnêtes) et
+  `rules.schema.json` aligné sur le format v1 ;
+- tests table-driven (chargement : 15 cas d'erreur inclus ; moteur : pattern,
+  périmètre par arête, dédoublonnage dominant, mémoire agrégée, ordre,
+  racine exclue) + intégration exemple×fixture `nplus1.json`.
 
 ### Jalon 3 — Scoreur (`internal/scorer`)
 
@@ -165,15 +190,9 @@ suggestions LLM.
 
 ## Questions ouvertes (TODO(phperf))
 
-1. **Clé stable des findings** pour la comparaison baseline (résistance aux
-   renommages/refactorings) — à définir ensemble, impacte `analyzer`,
-   `storage`, `phperf-ci`. Noté dans `analyzer/AGENTS.md` et
-   `cmd/phperf-ci/AGENTS.md`.
-2. Format exact du pont PHP→Go (JSON intermédiaire) et modalités de
-   collecte (script dédié ? intégration request HTTP ?).
-3. Détection des boucles : hors périmètre XHProf → heuristique ou
-   enrichissement collecte (cf. jalon 2).
-4. `git init` + premier commit toujours pas faits.
+1. Format exact du pont PHP→Go (JSON intermédiaire) et modalités de
+   collecte (script dédié ? intégration request HTTP ?) — impactera
+   `internal/collector`, à trancher au jalon 4.
 
 ## Leçons & conventions acquises en cours de route
 

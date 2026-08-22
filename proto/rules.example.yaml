@@ -1,77 +1,68 @@
-# PHPerf Rules Example
-# Fichier de regles YAML pour le moteur de priorisation PHPerf.
-# Chaque regle detecte un anti-pattern et produit un Finding.
-# Le schema de validation est disponible dans proto/rules.schema.json.
+# PHPerf Rules Example (v1)
+# Fichier de règles pour le moteur de priorisation PHPerf.
+# Schéma de validation : proto/rules.schema.json.
+#
+# Limites connues en v1 (cf. docs/jalons.md) :
+#   - la détection « in-loop » est une heuristique : nb d'appels d'un même
+#     site caller→callee au sein d'une trace ;
+#   - pas de comparaison des arguments ni de profondeur de récursion :
+#     le format XHProf ne porte pas ces informations.
 
 rules:
-  # Exemple 1 : appels reseau externes dans une boucle
+  # Exemple 1 : appels réseau répétés depuis un même site d'appel
+  # (heuristique « in-loop »)
   - id: network-call-in-loop
-    name: "Appel reseau externe dans une boucle"
-    description: "Un appel a un service externe (HTTP, API) est effectue pendant une iteration de boucle. Cela peut etre remplace par un cache ou un lot."
+    name: "Appels réseau répétés"
+    description: "Un même site d'appel contacte plusieurs fois un service externe (HTTP, API) au cours d'une trace — typiquement une boucle. Remplaçable par un cache ou un traitement par lot."
     severity: high
     effort: low
     controllability: partial
     match:
       function_pattern: "^(curl_|file_get_contents|file_put_contents|fopen|Zend\\\\Http\\\\Client)"
-      context:
-        parent_loops: ">=1"
+      call_count_threshold: ">=3"
     recommendation: |
-      Cachez les resultats de l'appel externe (Redis, APCu) ou
-      externalisez les appels en lot (queue RabbitMQ/Resque).
-      Si deja cache, masquez ce finding.
+      Cachez les résultats de l'appel externe (Redis, APCu) ou regroupez
+      les appels en un seul lot (queue RabbitMQ/Resque).
+      Si l'appel est déjà caché, masquez ce finding.
 
-  # Exemple 2 : duplication de calcul
+  # Exemple 2 : calcul dupliqué probable — sans vérification des arguments,
+  # absents du format XHProf ; à confirmer avant correction.
   - id: duplicated-calculation
-    name: "Calcul duplique"
-    description: "La meme fonction ou methode est appelee plusieurs fois avec les memes arguments au sein d'une meme trace."
+    name: "Calcul dupliqué probable"
+    description: "La même fonction est appelée plusieurs fois depuis un même site d'appel au sein d'une trace. Les arguments ne sont pas comparés (non disponibles dans le profil)."
     severity: medium
     effort: low
     controllability: controllable
     match:
       call_count_threshold: ">=3"
-      same_arguments: true
     recommendation: |
-      Memoisez le resultat avec un cache local ou un decorator.
-      Regroupez les appels dans un seul service si possible.
+      Memoïsez le résultat avec un cache local ou un décorateur, après
+      avoir vérifié que les arguments sont identiques d'un appel à l'autre.
 
-  # Exemple 3 : requete SQL dans une boucle
+  # Exemple 3 : requête SQL répétée — pattern N+1 typique
+  # (heuristique « in-loop »)
   - id: n-plus-one-query
-    name: "Probleme de requete N+1"
-    description: "Une requete SQL est executee a l'interieur d'une boucle, typiquement un pattern N+1."
+    name: "Requête N+1 probable"
+    description: "Une fonction SQL est appelée de nombreuses fois depuis un même site — typiquement une itération qui déclenche sa propre requête."
     severity: critical
     effort: medium
     controllability: controllable
     match:
-      function_pattern: "^(PDO|Doctrine\\\\ORM\\\\|mysqli_|pg_query)"
-      context:
-        parent_loops: ">=1"
-        caller_is_loop_body: true
+      function_pattern: "^(PDO|mysqli_|pg_query|Doctrine\\\\)"
+      call_count_threshold: ">=3"
     recommendation: |
-      Utilisez un fetch batch (fetchJoin, eager loading) ou
-      un repository avec une requete aggregate en une passe.
+      Utilisez un fetch batch (fetchJoin, eager loading) ou une requête
+      agrégée unique au lieu de requêter à chaque itération.
 
-  # Exemple 4 : fonction recursive profonde
-  - id: deep-recursion
-    name: "Recursion profonde"
-    description: "La recursion depasse un niveau de profondeur critique, risque de stack overflow."
-    severity: medium
-    effort: high
-    controllability: controllable
-    match:
-      recursion_depth_threshold: ">=20"
-    recommendation: |
-      Convertissez la recursion en iteration avec une pile explicite.
-      Verifiez que les donnees en entree ne provoquent pas de recursion infinie.
-
-  # Exemple 5 : allocation memoire importante
+  # Exemple 4 : allocation mémoire importante par appel
   - id: memory-heavy-allocation
-    name: "Allocation memoire importante"
-    description: "Une fonction consomme une quantite anormale de memoire par appel."
+    name: "Allocation mémoire importante"
+    description: "La fonction consomme en moyenne beaucoup de mémoire par appel."
     severity: medium
     effort: low
     controllability: controllable
     match:
       memory_per_call_threshold_mb: ">=10"
     recommendation: |
-      Traitez les donnees par flux (streaming) au lieu de charger en memoire.
-      Utilisez des generateurs (yield) pour les grandes collections.
+      Traitez les données par flux (streaming) au lieu de tout charger en
+      mémoire ; utilisez des générateurs (yield) sur les grandes collections.
