@@ -8,19 +8,16 @@
 → Wiring DI + CLI flags + orchestration des étapes → `os.Exit(1)` uniquement
 si des findings nouveaux n’apparaissent pas dans la baseline.
 
-## Pipeline exécuté (ou commandes cobra)
+## Commandes (cobra)
 
-1. `Collect` (via `internal/collector/`)
-2. `Analyze` (via `internal/analyzer/`)
-3. `EvaluateRules` (via `internal/rules/`)
-4. `Score` (via `internal/scorer/`)
-5. `CompareBaseline` — filtrer les findings déjà connus, identifier les nouveaux
-6. `os.Exit(0)` si aucun nouveau finding, `os.Exit(1)` sinon, `os.Exit(2)` si erreur runtime
+- `phperf-ci baseline --profile=<json> --rules=<yaml>` — régénère
+  **intégralement** la baseline (façon `phpstan -b`, pas de fusion).
+- `phperf-ci run --profile=<json> --rules=<yaml> [--scoring=<yaml>]`
+  `[--baseline=.phperf-baseline.json]` — compare et échoue sur les nouveaux.
 
-Commandes prévues :
-
-- `phperf-ci baseline` — génère / met à jour la baseline
-- `phperf-ci run --baseline=.phperf-baseline.json` — exécution + comparaison
+Pipeline (wiring uniquement, un helper par étage dans `pipeline.go`) :
+lecture du profil JSON → `collector.DecodeRaw` → `analyzer.Normalize` →
+`rules.Load`+`Engine.Evaluate` → `baseline.Diff` (+ scorer pour l’affichage).
 
 ## Exit codes
 
@@ -28,21 +25,18 @@ Commandes prévues :
 |---|---|
 | 0 | Aucun nouveau finding par rapport à la baseline |
 | 1 | Nouveaux findings non couverts par la baseline |
-| 2 | Erreur d’exécution (profilage impossible, etc.) |
-
-## TODO(phperf) — question ouverte
-
-La comparaison à la baseline suppose qu'un finding soit identifiable de façon
-**stable entre deux exécutions** (ex : Rule ID + fonction localisée). Le
-format de cette clé — et sa résistance aux renommages/refactorings — reste à
-définir avec `internal/analyzer/` et `internal/storage/`.
+| 2 | Erreur d’exécution ou d’usage (fichiers, configs invalides…) |
 
 ## Ce qu’il ne faut PAS
 
 - AUCUN code métier → tout va dans `internal/`.
-- Aucun calcul de score/matching direct → délègre.
+- Aucun calcul de score/matching direct → délègue.
 
 ## Références croisées
 
-- Consomme : `internal/collector/`, `internal/analyzer/`, `internal/rules/`, `internal/scorer/`, `internal/report/`.
-- Sortie : CI (GitHub Actions, GitLab CI, etc.)
+- Consomme : `internal/collector/`, `internal/analyzer/`, `internal/rules/`,
+  `internal/scorer/`, `internal/baseline/`.
+- Format de clé : `<RuleID>|<callee>` — cf. jalon 2 (`docs/jalons.md`) ;
+  limite acceptée : un renommage de méthode produit un « nouveau » finding.
+- Sortie : CI (GitHub Actions, GitLab CI, etc.) ; la collecte PHP réelle
+  alimentera `--profile` au jalon suivant.

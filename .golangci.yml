@@ -52,6 +52,7 @@ linters:
             - pkg: github.com/phperf/phperf/internal/analyzer
             - pkg: github.com/phperf/phperf/internal/rules
             - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/baseline
             - pkg: github.com/phperf/phperf/internal/storage
             - pkg: github.com/phperf/phperf/internal/ui
             - pkg: github.com/phperf/phperf/internal/report
@@ -61,6 +62,7 @@ linters:
           deny:
             - pkg: github.com/phperf/phperf/internal/rules
             - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/baseline
             - pkg: github.com/phperf/phperf/internal/storage
             - pkg: github.com/phperf/phperf/internal/ui
             - pkg: github.com/phperf/phperf/internal/report
@@ -70,6 +72,7 @@ linters:
           deny:
             - pkg: github.com/phperf/phperf/internal/collector
             - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/baseline
             - pkg: github.com/phperf/phperf/internal/storage
             - pkg: github.com/phperf/phperf/internal/ui
             - pkg: github.com/phperf/phperf/internal/report
@@ -79,6 +82,17 @@ linters:
           deny:
             - pkg: github.com/phperf/phperf/internal/collector
             - pkg: github.com/phperf/phperf/internal/analyzer
+            - pkg: github.com/phperf/phperf/internal/baseline
+            - pkg: github.com/phperf/phperf/internal/storage
+            - pkg: github.com/phperf/phperf/internal/ui
+            - pkg: github.com/phperf/phperf/internal/report
+        baseline-only-rules:
+          files:
+            - "**/internal/baseline/**"
+          deny:
+            - pkg: github.com/phperf/phperf/internal/collector
+            - pkg: github.com/phperf/phperf/internal/analyzer
+            - pkg: github.com/phperf/phperf/internal/scorer
             - pkg: github.com/phperf/phperf/internal/storage
             - pkg: github.com/phperf/phperf/internal/ui
             - pkg: github.com/phperf/phperf/internal/report
@@ -90,6 +104,7 @@ linters:
             - pkg: github.com/phperf/phperf/internal/analyzer
             - pkg: github.com/phperf/phperf/internal/rules
             - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/baseline
             - pkg: github.com/phperf/phperf/internal/ui
             - pkg: github.com/phperf/phperf/internal/report
         ui-storage-report:
@@ -100,6 +115,7 @@ linters:
             - pkg: github.com/phperf/phperf/internal/analyzer
             - pkg: github.com/phperf/phperf/internal/rules
             - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/baseline
         report-storage-only:
           files:
             - "**/internal/report/**"
@@ -108,6 +124,7 @@ linters:
             - pkg: github.com/phperf/phperf/internal/analyzer
             - pkg: github.com/phperf/phperf/internal/rules
             - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/baseline
             - pkg: github.com/phperf/phperf/internal/ui
 
   exclusions:

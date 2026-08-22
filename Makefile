@@ -2,7 +2,7 @@ COMPOSE := docker compose
 DC_RUN  := $(COMPOSE) run --rm app
 
 .DEFAULT_GOAL := help
-.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer check build shell up down logs clean
+.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer tests-baseline ci-demo check build shell up down logs clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -39,11 +39,19 @@ tests-rules: ## Tests du package rules
 tests-scorer: ## Tests du package scorer
 	$(DC_RUN) go test -race -cover ./internal/scorer/
 
+tests-baseline: ## Tests du package baseline
+	$(DC_RUN) go test -race -cover ./internal/baseline/
+
+ci-demo: ## Démo CI : baseline puis run sur la fixture nplus1 (exit 0 attendu)
+	$(DC_RUN) bash -ec 'go build -buildvcs=false -o bin/phperf-ci ./cmd/phperf-ci \
+		&& bin/phperf-ci baseline --profile=scripts/fixtures/nplus1.json --rules=proto/rules.example.yaml \
+		&& bin/phperf-ci run --profile=scripts/fixtures/nplus1.json --rules=proto/rules.example.yaml'
+
 check: ## Tout vérifier d'un coup : lint + vet + tests
 	$(DC_RUN) bash -ec 'golangci-lint fmt --diff && golangci-lint run && go vet ./... && go test -race -cover ./...'
 
 build: ## Compile bin/phperf et bin/phperf-ci
-	$(DC_RUN) bash -ec 'go build -o bin/phperf ./cmd/phperf && go build -o bin/phperf-ci ./cmd/phperf-ci'
+	$(DC_RUN) bash -ec 'go build -buildvcs=false -o bin/phperf ./cmd/phperf && go build -buildvcs=false -o bin/phperf-ci ./cmd/phperf-ci'
 
 shell: ## Shell interactif dans le conteneur dev (go, golangci-lint…)
 	$(DC_RUN) bash

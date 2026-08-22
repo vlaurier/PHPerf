@@ -10,3 +10,8 @@
 # Artefacts Go (couverture, tests compilés)
 *.out
 *.test
+
+# Baseline produite par la démo (make ci-demo) — dans un vrai projet, elle
+# se versionne au contraire avec le code.
+/.phperf-baseline.json
+/.phperf-demo.json

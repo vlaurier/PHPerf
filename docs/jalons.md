@@ -17,12 +17,14 @@
 | 1 | Contrat collecteur (`collector.RawProfile`) + normalisation XHProf (`analyzer`) | ✅ Fait |
 | 2 | Moteur de règles YAML (`internal/rules`) | ✅ Fait |
 | 3 | Scoreur de priorité (`internal/scorer`) | ✅ Fait |
-| 4 | Storage SQLite + baseline CI (`storage`, `phperf-ci`) | ⬜ À faire |
+| 4 | Baseline CI (`baseline`, `phperf-ci`) — storage déplacé au 5 | ✅ Fait |
 | 5 | Rapports & UI web (`report`, `ui`, service `web`) | ⬜ À faire |
 
-Qualité : `make check` vert sur les jalons 0-3 ; couverture **100 %**
-constatée sur les quatre packages métier (`collector`, `analyzer`,
-`rules`, `scorer` — §5 racine) ; complexité ≤ 15 vérifiée par `cyclop`.
+Qualité : `make check` vert sur les jalons 0-4 ; couverture **100 %**
+constatée sur les cinq packages métier (`collector`, `analyzer`, `rules`,
+`scorer`, `baseline`) ; complexité ≤ 15 vérifiée par `cyclop`. Contrat
+d'exit codes de `phperf-ci` vérifié en conditions réelles (0 sur baseline
+à jour, 1 sur nouveaux findings — démo `make ci-demo`).
 
 Repo git initialisé le 22/08/2026 (branche `main`, premier commit `f5f653a`).
 
@@ -198,15 +200,39 @@ Livré :
 - tests table-driven (formule, tri stable, part de temps nulle, enum
   inconnu, pondérations invalides, 8 configs rejetées, exemple = défauts).
 
-### Jalon 4 — Storage SQLite + baseline CI (`storage`, `cmd/phperf-ci`)
+### Jalon 4 — Baseline CI (`internal/baseline`, `cmd/phperf-ci`) — FAIT
 
-- Schéma SQLite : profils, findings, décisions de masquage (persistant).
-- Baseline façon PHPStan : `phperf-ci baseline` génère/met à jour
-  `.phperf-baseline.json` ; `phperf-ci run --baseline=…` compare et
-  `exit(1)` uniquement sur findings nouveaux (codes 0/1/2 documentés dans
-  `cmd/phperf-ci/AGENTS.md`).
-- Collecte réelle : orchestration PHP + XHProf + pont JSON
-  (`perftools/php-profiler`), scripts dans `scripts/`.
+Décisions validées avec le pilote (22/08/2026) :
+
+- **Périmètre recentré** : la collecte PHP réelle et le stockage SQLite
+  sortent du jalon. Rationale : la CI est **autonome sur le fichier**
+  `.phperf-baseline.json` (reproductible partout, zéro état externe) ;
+  le triage/masquage SQLite n'a de consommateur qu'à partir de l'UI
+  (jalon 5) — pas de code sans user story (§7 racine). La collecte réelle
+  nécessite un runtime PHP absent de l'image dev → jalon dédié ensuite.
+- **`phperf-ci baseline`** : régénération complète façon `phpstan -b`
+  (pas de fusion incrémentale).
+- **Driver SQLite (reporté au jalon 5)** : `modernc.org/sqlite` pur Go,
+  sans cgo.
+- **Nouvelle couche depguard** : `baseline → rules` ; matrice
+  `.golangci.yml` et AGENTS.md §3 mises à jour ensemble.
+
+Livré :
+
+- `internal/baseline/baseline.go` — format v1 `{version, entries[{key,
+  rule_id, function}]}` ; `Load` strict (`DisallowUnknownFields`, version
+  contrôlée) ; `Save` déterministe (tri par clé, aucun horodatage → diffs
+  git stables d'une régénération à l'autre) ; `Diff(findings, baseline)`
+  → nouveaux / connus ;
+- `cmd/phperf-ci` (cobra) — `baseline` et `run --profile --rules
+  [--scoring] [--baseline]`, exit codes 0/1/2, rapport texte listant les
+  nouveaux findings (priorité + recommandation) ;
+  pipeline = wiring collector → analyzer → rules (+ scorer affichage) dans
+  `pipeline.go` ; zéro logique métier dans cmd ;
+- dépendance ajoutée : `spf13/cobra` (stack prévue §2 racine) ;
+- tests table-driven baseline (chargement strict, tri/déterminisme,
+  round-trip, diff mixte/vide/tout-connu) ; cible `make ci-demo`
+  (baseline puis run sur la fixture nplus1).
 
 ### Jalon 5 — Rapports & UI web (`report`, `ui`, service `web`)
 

@@ -47,9 +47,13 @@ Toutes les cibles (`make help`) lancent les outils **dans le conteneur** :
 dans une baseline, ensuite la CI ne juge que la régression.
 
 ```bash
-phperf-ci baseline --script=test_request.php   # génère / met à jour la baseline (.phperf-baseline.json)
-phperf-ci run --script=test_request.php --baseline=.phperf-baseline.json
+phperf-ci baseline --profile=profil.json --rules=proto/rules.example.yaml   # régénère la baseline (.phperf-baseline.json)
+phperf-ci run --profile=profil.json --rules=proto/rules.example.yaml        # exit 1 sur les nouveaux findings
 ```
+
+`--profile` est un profil XHProf sérialisé en JSON ; `--rules` un fichier
+de règles YAML (`proto/rules.example.yaml` comme modèle) ; `--scoring`
+permet d'ajuster les pondérations de priorité (optionnel).
 
 La baseline se versionne avec le projet ; les findings qu'elle contient sont
 considérés comme connus et ignorés jusqu'à correction ou régénération.

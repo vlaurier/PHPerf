@@ -53,7 +53,8 @@ PHPerf/
 │   ├── analyzer/                ← normalisation du call graph
 │   ├── rules/                   ← moteur de règles YAML
 │   ├── scorer/                  ← calcul du score de priorité
-│   ├── storage/                 ← SQLite (profils, findings, masquage)
+│   ├── baseline/                ← fichier baseline CI + diff nouveaux findings
+│   ├── storage/                 ← SQLite (profils, findings, masquage) — jalon 5
 │   ├── ui/                      ← handlers HTTP + templates
 │   └── report/                  ← génération de rapports (HTML, JSON)
 ├── proto/                       ← schéma/example des règles
@@ -79,6 +80,7 @@ collector ──✗──  aucune dépendance interne
 analyzer  →  collector
 rules     →  analyzer
 scorer    →  rules
+baseline  →  rules
 storage   ──✗──  définit ses propres modèles (pas d'import métier)
 ui        →  storage, report
 report    →  storage

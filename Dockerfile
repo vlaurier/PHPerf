@@ -14,4 +14,8 @@ RUN curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/main/ins
 ARG GOIMPORTS_VERSION=latest
 RUN go install "golang.org/x/tools/cmd/goimports@${GOIMPORTS_VERSION}"
 
+# Le workspace est monté depuis l'hôte (UID différent) : git refuserait de
+# l'inspecter sinon, ce qui casse `go build` (estampillage VCS).
+RUN git config --system --add safe.directory /workspace
+
 WORKDIR /workspace
