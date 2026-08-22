@@ -4,6 +4,7 @@ package rules
 type Evidence struct {
 	CallCount    int64   // nb d'appels depuis le site d'appel dominant
 	MemPerCallMB float64 // mémoire moyenne par appel ; renseigné si la règle porte un seuil mémoire
+	TimeShare    float64 // part du wall time du callee dans la trace (0–1) ; consommée par le scoreur
 }
 
 // Finding — anti-pattern détecté par une règle sur le call graph.

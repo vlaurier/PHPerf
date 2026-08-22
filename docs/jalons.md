@@ -16,13 +16,13 @@
 | 0 | Environnement dev (Docker, Makefile, lint v2, docs pivot baseline) | ✅ Fait |
 | 1 | Contrat collecteur (`collector.RawProfile`) + normalisation XHProf (`analyzer`) | ✅ Fait |
 | 2 | Moteur de règles YAML (`internal/rules`) | ✅ Fait |
-| 3 | Scoreur de priorité (`internal/scorer`) | ⬜ À faire |
+| 3 | Scoreur de priorité (`internal/scorer`) | ✅ Fait |
 | 4 | Storage SQLite + baseline CI (`storage`, `phperf-ci`) | ⬜ À faire |
 | 5 | Rapports & UI web (`report`, `ui`, service `web`) | ⬜ À faire |
 
-Qualité : `make check` vert sur les jalons 0-2 ; couverture **100 %** sur
-`collector`, `analyzer` (constatée) et `rules` (objectif §5 racine) ;
-complexité ≤ 15 vérifiée par `cyclop`.
+Qualité : `make check` vert sur les jalons 0-3 ; couverture **100 %**
+constatée sur les quatre packages métier (`collector`, `analyzer`,
+`rules`, `scorer` — §5 racine) ; complexité ≤ 15 vérifiée par `cyclop`.
 
 Repo git initialisé le 22/08/2026 (branche `main`, premier commit `f5f653a`).
 
@@ -124,7 +124,7 @@ doublé (3100 au lieu de 1900). Les tests de non-régression sont en place.
 
 ## Jalons suivants (proposition, à valider avant de coder)
 
-### Jalon 2 — Moteur de règles YAML (`internal/rules`) — LIVRÉ, gates à valider
+### Jalon 2 — Moteur de règles YAML (`internal/rules`) — FAIT
 
 Décisions validées avec le pilote (22/08/2026) :
 
@@ -162,10 +162,41 @@ Livré :
   périmètre par arête, dédoublonnage dominant, mémoire agrégée, ordre,
   racine exclue) + intégration exemple×fixture `nplus1.json`.
 
-### Jalon 3 — Scoreur (`internal/scorer`)
+### Jalon 3 — Scoreur (`internal/scorer`) — FAIT
 
-- Formule brainstorming §4.2 : `Impact` (% wall × nb appels) × `Effort`
-  × `Contrôlabilité` ; poids ajustables ; sortie = findings priorisés.
+Décisions validées avec le pilote (22/08/2026) :
+
+- **Score normalisé 0–100** (vs formule brute non bornée du brainstorming
+  §4.2).
+- **Pas de multiplicateur par nombre d'appels** : le temps inclusif du callee
+  agrège déjà ses répétitions (50 requêtes N+1 pèsent dans son WT) ;
+  multiplier encore par CT reviendrait à compter deux fois le même coût.
+  CT reste dans `Evidence` pour affichage/filtrage CI ultérieur.
+- **Le scoreur ne consomme que des findings** (matrice depguard respectée :
+  scorer → rules uniquement) : `rules.Evidence` a été enrichi de
+  `TimeShare` (part du wall time du callee dans la trace), calculé par
+  l'engine qui a accès au graphe.
+- **Config YAML ajustable dès ce jalon** (l'originalité produit) :
+  `proto/scoring.example.yaml` + `scoring.schema.json` ; fusion sur les
+  défauts embarqués, décodage strict comme pour les règles.
+
+Formule v1 :
+
+    Priority = 100 × TimeShare × poids_effort × poids_contrôlabilité
+
+Défauts : effort low=1.0 / medium=0.6 / high=0.3 ; contrôlabilité
+controllable=1.0 / partial=0.6 / none=0.3.
+
+Livré :
+
+- `score.go` — interface `Scorer`, `Engine.Score` (tri décroissant stable,
+  priorité nulle si l'enum d'un finding est absent des pondérations),
+  `DefaultWeights`, validation à la construction (poids > 0) ;
+- `config.go` — `LoadWeights(data)` strict : champs inconnus rejetés,
+  clés d'enum contrôlées, valeurs > 0, fusion sur les défauts ;
+- `proto/scoring.example.yaml` + `proto/scoring.schema.json` ;
+- tests table-driven (formule, tri stable, part de temps nulle, enum
+  inconnu, pondérations invalides, 8 configs rejetées, exemple = défauts).
 
 ### Jalon 4 — Storage SQLite + baseline CI (`storage`, `cmd/phperf-ci`)
 

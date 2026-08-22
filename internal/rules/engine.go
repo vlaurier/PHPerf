@@ -49,6 +49,9 @@ func NewEngine(rules []Rule) (*Engine, error) {
 //   - memory_per_call_threshold_mb : mémoire moyenne par appel du callee,
 //     agrégée sur tous ses sites d'appel (ΣMU / ΣCT).
 //
+// Chaque finding embarque en outre Evidence.TimeShare : la part du wall time
+// du callee dans la trace, consommée par internal/scorer.
+//
 // Les findings sont dédupliqués par clé stable (règle|callee) : quand
 // plusieurs sites déclenchent la même règle sur le même callee, un seul
 // finding est produit et Caller retient le site dominant (plus grand CT).
@@ -81,6 +84,11 @@ func (e *Engine) Evaluate(graph *analyzer.CallGraph) ([]Finding, error) {
 				}
 			}
 
+			timeShare := 0.0
+			if graph.Root.InclusiveWT > 0 {
+				timeShare = float64(graph.Nodes[callee].InclusiveWT) / float64(graph.Root.InclusiveWT)
+			}
+
 			key := findingKey(rule.ID, callee)
 			if p, ok := positions[key]; ok {
 				if edge.CT > findings[p].Evidence.CallCount { // site dominant
@@ -99,7 +107,7 @@ func (e *Engine) Evaluate(graph *analyzer.CallGraph) ([]Finding, error) {
 				Effort:          rule.Effort,
 				Controllability: rule.Controllability,
 				Recommendation:  rule.Recommendation,
-				Evidence:        Evidence{CallCount: edge.CT, MemPerCallMB: memMB},
+				Evidence:        Evidence{CallCount: edge.CT, MemPerCallMB: memMB, TimeShare: timeShare},
 			}
 			positions[key] = len(findings)
 			findings = append(findings, finding)

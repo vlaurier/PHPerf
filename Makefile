@@ -2,14 +2,14 @@ COMPOSE := docker compose
 DC_RUN  := $(COMPOSE) run --rm app
 
 .DEFAULT_GOAL := help
-.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules check build shell up down logs clean
+.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer check build shell up down logs clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-8s\033[0m %s\n", $$1, $$2}'
 
-fix: ## Corrige formatage + problèmes auto-fixables (golangci-lint fmt / run --fix)
-	$(DC_RUN) bash -ec 'golangci-lint fmt && golangci-lint run --fix'
+fix: ## Corrige formatage + auto-fixables (best effort : n'échoue pas sur ce qui demande une correction manuelle)
+	$(DC_RUN) bash -ec 'golangci-lint fmt && (golangci-lint run --fix || true)'
 
 lint: ## Vérifie formatage + analyse statique (gofmt, goimports, golangci-lint)
 	$(DC_RUN) bash -ec 'golangci-lint fmt --diff && golangci-lint run'
@@ -35,6 +35,9 @@ tests-analyzer: ## Tests du package analyzer
 
 tests-rules: ## Tests du package rules
 	$(DC_RUN) go test -race -cover ./internal/rules/
+
+tests-scorer: ## Tests du package scorer
+	$(DC_RUN) go test -race -cover ./internal/scorer/
 
 check: ## Tout vérifier d'un coup : lint + vet + tests
 	$(DC_RUN) bash -ec 'golangci-lint fmt --diff && golangci-lint run && go vet ./... && go test -race -cover ./...'

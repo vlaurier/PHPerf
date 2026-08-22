@@ -75,6 +75,7 @@ func TestEvaluate_FunctionPattern(t *testing.T) {
 	assert.Equal(t, "recommandation de test", f.Recommendation)
 	assert.Equal(t, int64(1), f.Evidence.CallCount)
 	assert.Equal(t, 0.0, f.Evidence.MemPerCallMB)
+	assert.InDelta(t, 0.4, f.Evidence.TimeShare, 0.001) // 400 µs / 1000 µs
 }
 
 func TestEvaluate_NoMatchAndRootExcluded(t *testing.T) {
@@ -162,6 +163,21 @@ func TestEvaluate_MemoryPerCallAggregated(t *testing.T) {
 
 	assert.Equal(t, "mem-ok|heavy", findings[0].Key)
 	assert.InDelta(t, 11.25, findings[0].Evidence.MemPerCallMB, 0.001)
+}
+
+func TestEvaluate_ZeroRootWallTime(t *testing.T) {
+	raw := collector.RawProfile{
+		analyzer.RootName:     entry(1, 0, 0, 0),
+		"main()==>PDO::query": entry(5, 100, 90, 0),
+	}
+
+	th := rules.Threshold(3)
+	eng := mustEngine(t, rule("n-plus-one", rules.Match{CallCountThreshold: &th}))
+
+	findings, err := eng.Evaluate(normalize(t, raw))
+	require.NoError(t, err)
+	require.Len(t, findings, 1)
+	assert.Equal(t, 0.0, findings[0].Evidence.TimeShare) // pas de division par zéro
 }
 
 func TestEvaluate_RuleOrderDeterministic(t *testing.T) {
