@@ -1,0 +1,135 @@
+# Config golangci-lint v2 (format requis depuis la v2.0).
+# Vérification : `make lint` ou `golangci-lint config verify` dans le conteneur.
+#
+# Deux gardes-fous architecturaux :
+#   - cyclop   : complexité cyclomatique max 15 par fonction ;
+#   - depguard : matrice de dépendances entre packages internes (cf. racine
+#                AGENTS.md §3) — une couche ne peut importer qu'une couche
+#                strictement inférieure, jamais l'inverse ni en diagonale.
+
+version: "2"
+
+linters:
+  enable:
+    - errcheck
+    - goconst
+    - gocritic
+    - govet
+    - ineffassign
+    - revive
+    - staticcheck   # englobe aussi gosimple (fusionnés en v2)
+    - unparam
+    - cyclop
+  # misspell volontairement absent : il ne connaît que l'anglais et
+  # signalerait tous les commentaires français comme fautes.
+
+  settings:
+    cyclop:
+      max-complexity: 15
+    goconst:
+      ignore-tests: true   # clés répétées = normal dans des fixtures de test
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - style
+    revive:
+      severity: warning
+      rules:
+        - name: unexported-naming
+        - name: if-return
+        - name: increment-decrement
+        - name: var-declaration
+
+    # Matrice de dépendances — chaque règle liste ce que la couche NE peut
+    # PAS importer. Toute nouvelle dépendance = modification explicite ici
+    # ET dans AGENTS.md racine.
+    depguard:
+      rules:
+        collector-no-internal:
+          files:
+            - "**/internal/collector/**"
+          deny:
+            - pkg: github.com/phperf/phperf/internal/analyzer
+            - pkg: github.com/phperf/phperf/internal/rules
+            - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/storage
+            - pkg: github.com/phperf/phperf/internal/ui
+            - pkg: github.com/phperf/phperf/internal/report
+        analyzer-only-collector:
+          files:
+            - "**/internal/analyzer/**"
+          deny:
+            - pkg: github.com/phperf/phperf/internal/rules
+            - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/storage
+            - pkg: github.com/phperf/phperf/internal/ui
+            - pkg: github.com/phperf/phperf/internal/report
+        rules-only-analyzer:
+          files:
+            - "**/internal/rules/**"
+          deny:
+            - pkg: github.com/phperf/phperf/internal/collector
+            - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/storage
+            - pkg: github.com/phperf/phperf/internal/ui
+            - pkg: github.com/phperf/phperf/internal/report
+        scorer-only-rules:
+          files:
+            - "**/internal/scorer/**"
+          deny:
+            - pkg: github.com/phperf/phperf/internal/collector
+            - pkg: github.com/phperf/phperf/internal/analyzer
+            - pkg: github.com/phperf/phperf/internal/storage
+            - pkg: github.com/phperf/phperf/internal/ui
+            - pkg: github.com/phperf/phperf/internal/report
+        storage-no-internal:
+          files:
+            - "**/internal/storage/**"
+          deny:
+            - pkg: github.com/phperf/phperf/internal/collector
+            - pkg: github.com/phperf/phperf/internal/analyzer
+            - pkg: github.com/phperf/phperf/internal/rules
+            - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/ui
+            - pkg: github.com/phperf/phperf/internal/report
+        ui-storage-report:
+          files:
+            - "**/internal/ui/**"
+          deny:
+            - pkg: github.com/phperf/phperf/internal/collector
+            - pkg: github.com/phperf/phperf/internal/analyzer
+            - pkg: github.com/phperf/phperf/internal/rules
+            - pkg: github.com/phperf/phperf/internal/scorer
+        report-storage-only:
+          files:
+            - "**/internal/report/**"
+          deny:
+            - pkg: github.com/phperf/phperf/internal/collector
+            - pkg: github.com/phperf/phperf/internal/analyzer
+            - pkg: github.com/phperf/phperf/internal/rules
+            - pkg: github.com/phperf/phperf/internal/scorer
+            - pkg: github.com/phperf/phperf/internal/ui
+
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - gocritic
+          - cyclop
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+    - gofumpt
+
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/phperf/phperf
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

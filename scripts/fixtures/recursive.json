@@ -1,0 +1,5 @@
+{
+  "main()": { "ct": 1, "wt": 2000, "cpu": 1800, "mu": 40000, "pmu": 38000 },
+  "main()==>App\\Fib::compute": { "ct": 1, "wt": 1900, "cpu": 1700, "mu": 30000, "pmu": 28000 },
+  "App\\Fib::compute==>App\\Fib::compute": { "ct": 6, "wt": 1200, "cpu": 1100, "mu": 10000, "pmu": 9000 }
+}

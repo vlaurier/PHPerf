@@ -1,0 +1,49 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "PHPerf Rules",
+  "description": "Schema JSON pour valider les fichiers de regles YAML de PHPerf.",
+  "type": "object",
+  "required": ["rules"],
+  "properties": {
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/rule" }
+    }
+  },
+  "definitions": {
+    "rule": {
+      "type": "object",
+      "required": ["id", "name", "description", "severity", "effort", "controllability", "match"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "severity": { "enum": ["critical", "high", "medium", "low"] },
+        "effort": { "enum": ["low", "medium", "high"] },
+        "controllability": { "enum": ["controllable", "partial", "none"] },
+        "match": { "$ref": "#/definitions/match" },
+        "recommendation": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "match": {
+      "type": "object",
+      "properties": {
+        "function_pattern": { "type": "string" },
+        "call_count_threshold": { "type": "string" },
+        "same_arguments": { "type": "boolean" },
+        "memory_per_call_threshold_mb": { "type": "number" },
+        "recursion_depth_threshold": { "type": "string" },
+        "context": { "$ref": "#/definitions/context" }
+      },
+      "additionalProperties": false
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "parent_loops": { "type": "string" },
+        "caller_is_loop_body": { "type": "boolean" }
+      }
+    }
+  }
+}

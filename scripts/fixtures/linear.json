@@ -1,0 +1,5 @@
+{
+  "main()": { "ct": 1, "wt": 1000, "cpu": 900, "mu": 50000, "pmu": 45000 },
+  "main()==>App\\Kernel::boot": { "ct": 1, "wt": 600, "cpu": 550, "mu": 30000, "pmu": 28000 },
+  "App\\Kernel::boot==>App\\Db::connect": { "ct": 1, "wt": 400, "cpu": 380, "mu": 20000, "pmu": 19000 }
+}

@@ -1,0 +1,7 @@
+.git
+.idea
+.opencode
+bin
+docs
+brainstorming.txt
+*.md

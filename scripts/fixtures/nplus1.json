@@ -1,0 +1,5 @@
+{
+  "main()": { "ct": 1, "wt": 9000, "cpu": 8000, "mu": 120000, "pmu": 110000 },
+  "main()==>App\\Controller::list": { "ct": 1, "wt": 8800, "cpu": 7900, "mu": 100000, "pmu": 95000 },
+  "App\\Controller::list==>PDO::query": { "ct": 50, "wt": 8000, "cpu": 7000, "mu": 80000, "pmu": 75000 }
+}

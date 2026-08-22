@@ -1,0 +1,77 @@
+# PHPerf Rules Example
+# Fichier de regles YAML pour le moteur de priorisation PHPerf.
+# Chaque regle detecte un anti-pattern et produit un Finding.
+# Le schema de validation est disponible dans proto/rules.schema.json.
+
+rules:
+  # Exemple 1 : appels reseau externes dans une boucle
+  - id: network-call-in-loop
+    name: "Appel reseau externe dans une boucle"
+    description: "Un appel a un service externe (HTTP, API) est effectue pendant une iteration de boucle. Cela peut etre remplace par un cache ou un lot."
+    severity: high
+    effort: low
+    controllability: partial
+    match:
+      function_pattern: "^(curl_|file_get_contents|file_put_contents|fopen|Zend\\\\Http\\\\Client)"
+      context:
+        parent_loops: ">=1"
+    recommendation: |
+      Cachez les resultats de l'appel externe (Redis, APCu) ou
+      externalisez les appels en lot (queue RabbitMQ/Resque).
+      Si deja cache, masquez ce finding.
+
+  # Exemple 2 : duplication de calcul
+  - id: duplicated-calculation
+    name: "Calcul duplique"
+    description: "La meme fonction ou methode est appelee plusieurs fois avec les memes arguments au sein d'une meme trace."
+    severity: medium
+    effort: low
+    controllability: controllable
+    match:
+      call_count_threshold: ">=3"
+      same_arguments: true
+    recommendation: |
+      Memoisez le resultat avec un cache local ou un decorator.
+      Regroupez les appels dans un seul service si possible.
+
+  # Exemple 3 : requete SQL dans une boucle
+  - id: n-plus-one-query
+    name: "Probleme de requete N+1"
+    description: "Une requete SQL est executee a l'interieur d'une boucle, typiquement un pattern N+1."
+    severity: critical
+    effort: medium
+    controllability: controllable
+    match:
+      function_pattern: "^(PDO|Doctrine\\\\ORM\\\\|mysqli_|pg_query)"
+      context:
+        parent_loops: ">=1"
+        caller_is_loop_body: true
+    recommendation: |
+      Utilisez un fetch batch (fetchJoin, eager loading) ou
+      un repository avec une requete aggregate en une passe.
+
+  # Exemple 4 : fonction recursive profonde
+  - id: deep-recursion
+    name: "Recursion profonde"
+    description: "La recursion depasse un niveau de profondeur critique, risque de stack overflow."
+    severity: medium
+    effort: high
+    controllability: controllable
+    match:
+      recursion_depth_threshold: ">=20"
+    recommendation: |
+      Convertissez la recursion en iteration avec une pile explicite.
+      Verifiez que les donnees en entree ne provoquent pas de recursion infinie.
+
+  # Exemple 5 : allocation memoire importante
+  - id: memory-heavy-allocation
+    name: "Allocation memoire importante"
+    description: "Une fonction consomme une quantite anormale de memoire par appel."
+    severity: medium
+    effort: low
+    controllability: controllable
+    match:
+      memory_per_call_threshold_mb: ">=10"
+    recommendation: |
+      Traitez les donnees par flux (streaming) au lieu de charger en memoire.
+      Utilisez des generateurs (yield) pour les grandes collections.

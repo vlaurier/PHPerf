@@ -1,0 +1,144 @@
+# Brainstorming — PHPerf (profils de performance PHP, open source & gratuit)
+
+## 1. Vision produit
+
+Créer un **outil open source gratuit** équivalent à **Blackfire** mais dont
+l'originalité n'est pas seulement le profilage : c'est la **priorisation
+explicite des actions correctives** et une **intégration CI avec quality gates
+(NO-GO)**.
+
+Contrairement à Blackfire / Tideways / Xdebug / php-spx / XHProf qui donnent
+des métriques mais une priorité implicite, PHPerf propose :
+
+  - Un **scoring automatique mais ajustable** (Impact x Effort x Controle)
+  - Un **système de masquage / triage** : un développeur peut cacher un
+    goulot qu'il juge non résoluble (ex : appel API externe deja cache) ;
+    le masquage est persiste et ignore en CI tant qu'il n'est pas demasque.
+  - Des **suggestions de fix** (inspire de Blackfire) : chaque finding est
+    accompagne d'une recommendation concrète (cache, refacto, queue...).
+  - Une **intégration CI** : un binaire `phpperf-ci` qui lance un test request,
+    profile, score, compare a un seuil ou un run de reference, et exit(1)
+    en cas de regression / finding critique.
+
+## 2. Domaine cible
+
+  - **Application cible** : applications PHP (Symfony prioritairement, mais
+    PHP générique ensuite).
+  - **Langage de construction (builder)** : **Go**
+      + Binaire unique, parfait pour la distribution en CI.
+      + Bonne bibliotheque standard (HTTP, JSON, templates).
+      + Syntaxe claire pour generation par IA.
+  - **Licence** : MIT (ou Apache-2.0) — eviter GPL-3 pour garder ouvert
+    toute option de licence finale.
+
+## 3. Profilage — choix du backing store
+
+Priorite a XHProf :
+  + Widespread (PECL, present dans beaucoup d'environnements).
+  + Format de donnees stable et documenté
+    (tableau cle "function==>caller" avec ct, wt, cpu, mu).
+  + Licence Apache 2.0 (safe).
+  + Bibliotheque `perftools/php-profiler` disponible pour faciliter la
+    collecte (auto-detection XHProf / Tideways).
+
+Extensibilite future :
+  - php-spx : format plus riche (pile complete, 22 metriques) ; a integrer
+    comme backend additionnel.
+  - phpspy / reli-prof : profiling par sampling (faible overhead) pour
+    environnements prod ; donnees statistiques, moins precises pour le
+    scoring automatise.
+
+## 4. Architecture (pipeline)
+
+```
+[ App PHP / Symfony ]
+   | (XHProf active)
+   v
+[ perftools/php-profiler ou script d'orchestration ]
+   | raw profile data
+   v
+[ Normaliseur (Go) ]
+   | call graph unifie
+   v
+[ Moteur de regles (YAML) ]
+   | findings + suggestions de fix
+   v
+[ Scoreur (Go) ]
+   | priorite (Impact x Effort x Controle)
+   v
+[ SQLite ]
+   | profils + findings + decisions de masquage
+   v
+[ UI Web (Go templates ou frontend separe) ]
+   | exploration / curatation / ajustement des scores
+   v
+[ CLI phpperf-ci ]
+   | quality gates NO-GO en CI
+```
+
+### 4.1 Moteur de regles (YAML)
+
+Chaque regle :
+  - `id`, `name`, `description`
+  - `match` : pattern de fonction, categorie, anti-pattern
+  - `severity` : critique / eleve / moyen / bas
+  - `effort` : faible / moyen / eleve (heuristique)
+  - `controllability` : controllable / partiellement / non
+  - `recommendation` : texte de suggestion de fix
+  - `gate` : oui/non (si true, declenche un echec en CI)
+
+Exemple :
+```yaml
+- id: external-network-in-loop
+  name: "Appels reseau externes dans une boucle"
+  match:
+    function_pattern: "^(curl_|file_get_contents|file_put_contents)"
+    caller_context: "loop"
+  severity: high
+  effort: medium
+  controllability: partial
+  recommendation: "Externalise les appels en file d'attente (queue) ou
+    cache les resultats pour eviter les appels repetes."
+  gate: true
+```
+
+### 4.2 Scoreur
+
+  - `Impact` = pct du temps total (wall) × nombre d'appels
+  - `Effort` = categorise par type de regle (low / medium / high)
+  - `Controle` = controllable / partially_controllable / not_controllable
+  - `Priority score` = Impact × (1/Effort) × Controle
+  - Seuil configurable en CI (ex : score > 80 → gate fails ; gate:true → fail)
+
+## 5. Extensibilite
+
+  - Backends de profilage plugables (XHProf, php-spx, phpspy, ...).
+  - Regles utilisateur et communautaires (YAML importables).
+  - Plugins de suggestion (LLM pour generer des recommendations contextuelles).
+  - Support multi-langage (Python, Go) futur ; parser commun a call graph.
+
+## 6. MVP minimal (phase 1)
+
+  1. Collecte XHProf via perftools/php-profiler + conversion vers format
+     consomme par Go (JSON intermediaire).
+  2. Parseur Go du call graph XHProf.
+  3. Moteur de regles YAML avec ~5 regles classiques :
+     - boucle + appels lents
+     - duplication de calcul
+     - requete SQL dans boucle
+     - appel reseau dans boucle
+     - fonction recursive profonde
+  4. Scoreur avec priorite.
+  5. CLI phpperf-ci : exit(1) si score > seuil ou gate=true finding.
+  6. UI web minimale : liste des findings, scores, masquage, suggestions.
+
+## 7. Decisions prises dans la discussion
+
+  - Pas de PHP/Symfony pour le builder : Go choisi pour le binaire CI.
+  - XHProf comme backing initial (pas php-spx, due : GPL-3 + complexite).
+  - Moteur de regles YAML : configurable, extensible, communautaire.
+  - Masquage persiste : SQLite comme store pour les decisions de triage.
+  - CI-first : le binaire phpperf-ci est le point d'entree principal pour
+    les quality gates.
+  - Scoring ajustable : les poids (Impact, Effort, Controle) sont
+    configurables; priorite par defaut automatique.

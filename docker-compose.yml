@@ -1,0 +1,25 @@
+x-go-env: &go-env
+  working_dir: /workspace
+  volumes:
+    - .:/workspace
+    - go-mod-cache:/go/pkg/mod
+    - go-build-cache:/root/.cache/go-build
+
+services:
+  app:
+    build:
+      context: .
+    <<: *go-env
+
+  web:
+    build:
+      context: .
+    ports:
+      - "${PHPERF_PORT:-8080}:8080"
+    command: sh -c "go build -o bin/phperf ./cmd/phperf && exec ./bin/phperf"
+    init: true
+    <<: *go-env
+
+volumes:
+  go-mod-cache:
+  go-build-cache:
