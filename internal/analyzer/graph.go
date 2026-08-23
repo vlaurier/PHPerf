@@ -19,6 +19,7 @@ type Edge struct {
 	WT     int64
 	CPU    int64
 	MU     int64
+	PMU    int64 // pic mémoire consommé via ce parent (delta de pic)
 }
 
 // CallGraph — graphe d'appels normalisé issu d'un profil brut.

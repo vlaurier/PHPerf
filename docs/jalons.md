@@ -19,8 +19,10 @@
 | 3 | Scoreur de priorité (`internal/scorer`) | ✅ Fait |
 | 4 | Baseline CI (`baseline`, `phperf-ci`) — storage déplacé au 5 | ✅ Fait |
 | 5 | Rapports & UI web (`report`, `ui`, `storage`, service `web`) | ✅ Fait |
+| 6 | Expressivité moteur + catalogue de règles (20 règles testées) | ✅ Fait |
+| 7 | Collecte PHP réelle (pont XHProf → JSON) | ⬜ À faire |
 
-Qualité : `make check` vert sur les jalons 0-5 ; couverture **100 %**
+Qualité : `make check` vert sur les jalons 0-6 ; couverture **100 %**
 constatée sur les cinq packages métier (`collector`, `analyzer`, `rules`,
 `scorer`, `baseline`) ; packages d'infrastructure entre 91 et 98 %
 (`report`, `storage`, `ui` — branches restantes : erreurs driver/scan
@@ -273,14 +275,62 @@ Livré :
   `web` mis à jour (fixture de démo, `-buildvcs=false`) ;
 - cibles make `tests-storage`, `tests-report`, `tests-ui`.
 
-### Jalon 6 — Collecte PHP réelle (proposition)
+### Jalon 6 — Expressivité du moteur + catalogue de règles — FAIT
+
+Décisions validées avec le pilote (23/08/2026) :
+
+- **La bibliothèque de règles est un livrable de connaissance en soi**,
+  pas un sous-produit du profilage réel : enrichie depuis la connaissance
+  des anti-patterns PHP classiques, pas « en découvrant le bruit » sur une
+  app. Le profilage réel servira ensuite à valider/ajuster, pas à démarrer.
+- **Chargement multi-fichiers (packs) refusé pour l'instant** : le
+  catalogue tient dans un fichier ; les packs par framework resteront un
+  jalon à part.
+- **Pilotage par user story de détection** : chaque nouveau critère de
+  match est justifié par des règles concrètes qu'il débloque.
+
+Moteur (`internal/rules`, `internal/analyzer`) :
+
+- nouveaux critères `Match` : `inclusive_wt_ms_threshold`,
+  `exclusive_wt_ms_threshold` (temps propre), `time_share_percent_threshold`
+  (part de trace 0–100), `caller_count_threshold` (fan-out),
+  `peak_memory_per_call_threshold_mb` (ΣPMU/ΣCT) et `exclude_pattern`
+  (anti faux positifs — ne compte pas comme critère déclencheur seul) ;
+- deux périmètres documentés : **par site d'appel** (pattern, call_count)
+  vs **par callee agrégé** (mémoire, temps, fan-out) — unités seuils en
+  ms/%/Mo, conversion interne µs/octets faite par le moteur ;
+- `analyzer.Edge` porte désormais PMU (pic mémoire propagé du brut) ;
+- refactor moteur : agrégats par callee calculés paresseusement une fois
+  par évaluation (`statsCache`), critères évalués dans `Match.satisfied`.
+
+Catalogue (`proto/rules.example.yaml`) : 20 règles organisées par familles —
+
+- amplification d'I/O : n-plus-one-query, slow-single-query (complément :
+  peu d'appels mais lourd), network-call-in-loop, filesystem-io-in-loop,
+  cache-chatter-in-loop, mail-send-in-loop ;
+- hotspots temporels : cpu-bound-function (temps propre, I/O exclues),
+  dominant-subtree (≥ 25 % de la trace) ;
+- sérialisation/traitement : serialization-hotspot, regex-heavy-work,
+  template-render-heavy ;
+- mémoire : memory-heavy-allocation, memory-spike-transient (PMU) ;
+- code smells au profil : debug-leftovers, blocking-sleep,
+  array-merge-in-loop, linear-scan-in-loop, slow-hash-repeated,
+  duplicated-calculation (heuristique faible assumée) ;
+- ORM : doctrine-hydration-storm.
+
+Conformité : chaque famille a sa fixture dédiée (`scripts/fixtures/
+{hotspot,io-heavy,smells,spike}.json`) et `TestCatalogAgainstFixtures`
+asserte les listes exactes de findings attendus (trigger ET non-trigger)
+sur les 7 fixtures.
+
+### Jalon 7 — Collecte PHP réelle (proposition)
 
 Pont XHProf → JSON : script PHP d'instrumentation + exécution depuis Go
 (format déjà posé par `collector.DecodeRaw`). Questions ouvertes Q1
 ci-dessous à trancher avant de coder.
 
-Post-MVP : backends php-spx / phpspy, règles communautaires importables,
-suggestions LLM.
+Post-MVP : packs de règles multi-fichiers (frameworks), backends php-spx /
+phpspy, suggestions LLM.
 
 ---
 

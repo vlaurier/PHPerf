@@ -51,6 +51,19 @@ func Load(data []byte) ([]Rule, error) {
 	return file.Rules, nil
 }
 
+// positiveCriteria — critères capables de déclencher un finding
+// (exclude_pattern n'en fait pas partie : seul, il ne détecte rien).
+func positiveCriteria(m *Match) bool {
+	return m.FunctionPattern != "" ||
+		m.CallCountThreshold != nil ||
+		m.MemoryPerCallThresholdMB != nil ||
+		m.PeakMemPerCallThresholdMB != nil ||
+		m.InclusiveWTMsThreshold != nil ||
+		m.ExclusiveWTMsThreshold != nil ||
+		m.TimeSharePercentThreshold != nil ||
+		m.CallerCountThreshold != nil
+}
+
 // validateRule — vérifie la cohérence d'une règle : identité, champs requis,
 // enums, et présence d'au moins un critère de match exploitable.
 func validateRule(r *Rule) error {
@@ -74,12 +87,18 @@ func validateRule(r *Rule) error {
 	}
 
 	m := &r.Match
-	if m.FunctionPattern == "" && m.CallCountThreshold == nil && m.MemoryPerCallThresholdMB == nil {
+	if !positiveCriteria(m) {
 		return errors.New("match : au moins un critère requis")
 	}
-	if m.FunctionPattern != "" {
-		if _, err := regexp.Compile(m.FunctionPattern); err != nil {
-			return fmt.Errorf("match.function_pattern %q invalide : %w", m.FunctionPattern, err)
+	for _, pe := range [][2]string{
+		{"function_pattern", m.FunctionPattern},
+		{"exclude_pattern", m.ExcludePattern},
+	} {
+		if pe[1] == "" {
+			continue
+		}
+		if _, err := regexp.Compile(pe[1]); err != nil {
+			return fmt.Errorf("match.%s %q invalide : %w", pe[0], pe[1], err)
 		}
 	}
 	return nil

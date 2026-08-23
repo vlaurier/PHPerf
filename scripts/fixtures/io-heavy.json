@@ -1,0 +1,8 @@
+{
+  "main()": { "ct": 1, "wt": 300000, "cpu": 60000, "mu": 2000000, "pmu": 1800000 },
+  "main()==>App\\Report::build": { "ct": 1, "wt": 295000, "cpu": 55000, "mu": 1800000, "pmu": 1700000 },
+  "App\\Report::build==>PDO::query": { "ct": 1, "wt": 150000, "cpu": 20000, "mu": 500000, "pmu": 480000 },
+  "App\\Report::build==>file_get_contents": { "ct": 4, "wt": 30000, "cpu": 8000, "mu": 200000, "pmu": 190000 },
+  "App\\Report::build==>mail": { "ct": 3, "wt": 20000, "cpu": 3000, "mu": 50000, "pmu": 45000 },
+  "App\\Report::build==>Redis::get": { "ct": 12, "wt": 25000, "cpu": 5000, "mu": 30000, "pmu": 28000 }
+}

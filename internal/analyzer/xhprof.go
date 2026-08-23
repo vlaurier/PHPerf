@@ -103,7 +103,7 @@ func (g *CallGraph) node(name string) *Node {
 func (g *CallGraph) addEdge(caller, callee string, entry collector.Entry) {
 	g.node(caller) // s'assure que le nœud parent existe
 
-	e := Edge{Caller: caller, Callee: callee, CT: entry.CT, WT: entry.WT, CPU: entry.CPU, MU: entry.MU}
+	e := Edge{Caller: caller, Callee: callee, CT: entry.CT, WT: entry.WT, CPU: entry.CPU, MU: entry.MU, PMU: entry.PMU}
 	g.Children[caller] = append(g.Children[caller], e)
 	g.Edges = append(g.Edges, e)
 

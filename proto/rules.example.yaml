@@ -1,32 +1,301 @@
 # PHPerf Rules Example (v1)
-# Fichier de règles pour le moteur de priorisation PHPerf.
+# Catalogue de règles pour le moteur de priorisation PHPerf.
 # Schéma de validation : proto/rules.schema.json.
 #
+# Deux périmètres d'observation des critères :
+#   - par site d'appel : function_pattern, call_count_threshold
+#     (heuristique « in-loop » : N appels depuis un même site au sein
+#     d'une trace) ;
+#   - agrégés par callee, tous sites confondus : seuils mémoire (moyenne
+#     et pic par appel), temps inclusif/exclusif en ms, part du wall time
+#     total de la trace (%), nombre de sites d'appel distincts.
+#
 # Limites connues en v1 (cf. docs/jalons.md) :
-#   - la détection « in-loop » est une heuristique : nb d'appels d'un même
-#     site caller→callee au sein d'une trace ;
+#   - la détection « in-loop » est une heuristique : une boucle n'est pas
+#     une fonction, aucun profileur ne la porte ;
 #   - pas de comparaison des arguments ni de profondeur de récursion :
-#     le format XHProf ne porte pas ces informations.
+#     le format XHProf ne porte pas ces informations ;
+#   - les règles à pattern ne connaissent que les noms de fonctions/méthodes
+#     observés : elles restent muettes sur ce qu'elles ne reconnaissent pas,
+#     et peuvent sonner faux sur du code renommé — c'est le rôle du
+#     masquage et de l'ajustement des scores.
 
 rules:
-  # Exemple 1 : appels réseau répétés depuis un même site d'appel
-  # (heuristique « in-loop »)
+  # ─── Amplification d'I/O ────────────────────────────────────────────────
+
+  # Requête SQL répétée depuis un même site — pattern N+1 typique.
+  - id: n-plus-one-query
+    name: "Requête N+1 probable"
+    description: "Une fonction SQL est appelée de nombreuses fois depuis un même site — typiquement une itération qui déclenche sa propre requête."
+    severity: critical
+    effort: medium
+    controllability: controllable
+    match:
+      function_pattern: "^(PDO|mysqli_|pg_|Doctrine\\\\DBAL|Illuminate\\\\Database)"
+      call_count_threshold: ">=3"
+    recommendation: |
+      Utilisez un fetch batch (fetchJoin, eager loading) ou une requête
+      agrégée unique au lieu de requêter à chaque itération.
+
+  # Une seule requête géante — complémentaire du N+1 : peu d'appels,
+  # mais un sous-arbre qui pèse. Piste classique : index manquant.
+  - id: slow-single-query
+    name: "Requête lourde"
+    description: "Une fonction SQL concentre un temps inclusif élevé, quel que soit son nombre d'appels."
+    severity: critical
+    effort: medium
+    controllability: partial
+    match:
+      function_pattern: "^(PDO|mysqli_|pg_|Doctrine\\\\DBAL|Illuminate\\\\Database)"
+      inclusive_wt_ms_threshold: ">=100"
+    recommendation: |
+      Vérifiez le plan d'exécution (EXPLAIN) et les index ; réduisez le
+      volume transféré (colonnes ciblées, pagination). Si la requête est
+      intrinsèquement lourde et fréquente, envisagez un cache de résultat.
+
+  # Appels réseau répétés depuis un même site d'appel.
   - id: network-call-in-loop
     name: "Appels réseau répétés"
-    description: "Un même site d'appel contacte plusieurs fois un service externe (HTTP, API) au cours d'une trace — typiquement une boucle. Remplaçable par un cache ou un traitement par lot."
+    description: "Un même site d'appel contacte plusieurs fois un service externe (HTTP, API, SOAP) au cours d'une trace."
     severity: high
     effort: low
     controllability: partial
     match:
-      function_pattern: "^(curl_|file_get_contents|file_put_contents|fopen|Zend\\\\Http\\\\Client)"
+      function_pattern: "^(curl_|GuzzleHttp|Zend\\\\Http|SoapClient)"
       call_count_threshold: ">=3"
     recommendation: |
       Cachez les résultats de l'appel externe (Redis, APCu) ou regroupez
-      les appels en un seul lot (queue RabbitMQ/Resque).
+      les appels en un seul lot (batch API, queue RabbitMQ/Resque).
       Si l'appel est déjà caché, masquez ce finding.
 
-  # Exemple 2 : calcul dupliqué probable — sans vérification des arguments,
-  # absents du format XHProf ; à confirmer avant correction.
+  # I/O fichiers répétées depuis un même site — stat/read/write en boucle.
+  - id: filesystem-io-in-loop
+    name: "I/O fichiers répétées"
+    description: "Un même site d'appel lit ou écrit plusieurs fois le système de fichiers au cours d'une trace."
+    severity: medium
+    effort: low
+    controllability: controllable
+    match:
+      function_pattern: "^(fopen|fwrite|fread|fgetcsv|file_put_contents|file_get_contents|scandir|glob|opendir)"
+      call_count_threshold: ">=3"
+    recommendation: |
+      Regroupez les accès : lecture en un seul appel puis découpage en
+      mémoire, cache de listings de répertoires, ou stockage délégué
+      (Redis, base de données) si le fichier sert d'appoint.
+
+  # Cache bavard : chaque get/set coûte un aller-retour réseau.
+  - id: cache-chatter-in-loop
+    name: "Cache bavard (allers-retours multiples)"
+    description: "Un même site multiplie les opérations unitaires sur Redis/Memcached/APCu — autant d'allers-retours réseau."
+    severity: medium
+    effort: low
+    controllability: controllable
+    match:
+      function_pattern: "^(Redis|Predis\\\\Client|Memcache|APCu|apcu_)"
+      call_count_threshold: ">=10"
+    recommendation: |
+      Regroupez les accès : MGET/HGETALL/pipeline côté Redis, lecture
+      groupée côté APCu. Un cache consulté clé par clé dans une boucle
+      coûte plus cher que la donnée qu'il évite.
+
+  # Envoi d'e-mails répété depuis un même site.
+  - id: mail-send-in-loop
+    name: "Envois d'e-mail en boucle"
+    description: "Plusieurs e-mails envoyés depuis un même site d'appel au cours d'une trace — typiquement une notification par itération."
+    severity: high
+    effort: medium
+    controllability: controllable
+    match:
+      function_pattern: "^(mail$|Swift_|PHPMailer|Symfony\\\\Component\\\\Mailer)"
+      call_count_threshold: ">=3"
+    recommendation: |
+      Sortez l'envoi du chemin de la requête : file d'attente (spool,
+      queue) avec envoi asynchrone ; regroupez les destinataires quand
+      le contenu est partagé.
+
+  # ─── Hotspots temporels ────────────────────────────────────────────────
+
+  # Temps propre (hors enfants) élevé : le code PHP lui-même est lent.
+  # Les familles d'I/O sont exclues : leur wall time porte de l'attente,
+  # pas du calcul — elles ont leurs propres règles.
+  - id: cpu-bound-function
+    name: "Fonction gourmande en CPU"
+    description: "La fonction consomme un temps propre élevé — le coût est dans son propre code, pas dans ses appels enfants. Fonctions d'I/O exclues."
+    severity: high
+    effort: high
+    controllability: partial
+    match:
+      exclusive_wt_ms_threshold: ">=50"
+      exclude_pattern: "^(PDO|mysqli_|pg_|curl_|GuzzleHttp|SoapClient|Redis|Predis|Memcache|apcu_|file_get_contents|file_put_contents|fopen|fread|fwrite|mail$|Swift_)"
+    recommendation: |
+      Le coût est algorithmique : réduisez la complexité, mettez en cache
+      le résultat, ou déportez vers une extension native / un service
+      spécialisé. Profilez finement la fonction avant d'agir.
+
+  # Sous-arbre dominant : quelle que soit sa nature, il structure la trace.
+  - id: dominant-subtree
+    name: "Sous-arbre dominant"
+    description: "La fonction concentre une large part du wall time total de la trace — tout gain s'y obtient en proportion."
+    severity: medium
+    effort: medium
+    controllability: partial
+    match:
+      time_share_percent_threshold: ">=25"
+    recommendation: |
+      Diagnostic à affiner : identifiez ce que fait cette fonction et si
+      son résultat peut être mis en cache, calculé moins souvent ou
+      décomposé. Masquez ce finding si la dépense est justifiée.
+
+  # ─── Sérialisation & traitement de chaînes ─────────────────────────────
+
+  - id: serialization-hotspot
+    name: "Sérialisation coûteuse"
+    description: "Encodage/décodage (JSON, serialize…) dont le sous-arbre pèse dans la trace."
+    severity: medium
+    effort: medium
+    controllability: controllable
+    match:
+      function_pattern: "^(json_encode|json_decode|serialize|unserialize|igbinary_)"
+      inclusive_wt_ms_threshold: ">=20"
+    recommendation: |
+      Sérialisez moins : champs ciblés plutôt que graphes entiers, cache
+      de représentation pour les structures stables, format binaire
+      (igbinary) pour les échanges internes.
+
+  - id: regex-heavy-work
+    name: "Expressions régulières coûteuses"
+    description: "Les fonctions preg_* consomment un temps significatif — backtracking ou recompilation probable."
+    severity: medium
+    effort: high
+    controllability: controllable
+    match:
+      function_pattern: "^preg_"
+      inclusive_wt_ms_threshold: ">=20"
+    recommendation: |
+      Précompilez les motifs (preg_quote, constantes), remplacez par
+      str_* quand le motif est littéral, et vérifiez les quantificateurs
+      imbriqués sources de backtracking catastrophique.
+
+  - id: template-render-heavy
+    name: "Rendu de template lourd"
+    description: "Le rendu d'un moteur de templates pèse dans la trace — héritage de blocs ou données non préparées."
+    severity: medium
+    effort: medium
+    controllability: partial
+    match:
+      function_pattern: "^(Twig\\\\|Smarty|Latte\\\\)"
+      inclusive_wt_ms_threshold: ">=50"
+    recommendation: |
+      Mettez en cache les fragments statiques (partial caching), réduisez
+      la profondeur d'héritage, préparez les données en amont plutôt que
+      d'itérer/logiquer dans le template.
+
+  # ─── Mémoire ───────────────────────────────────────────────────────────
+
+  # Allocation moyenne importante par appel.
+  - id: memory-heavy-allocation
+    name: "Allocation mémoire importante"
+    description: "La fonction consomme en moyenne beaucoup de mémoire par appel."
+    severity: medium
+    effort: low
+    controllability: controllable
+    match:
+      memory_per_call_threshold_mb: ">=10"
+    recommendation: |
+      Traitez les données par flux (streaming) au lieu de tout charger en
+      mémoire ; utilisez des générateurs (yield) sur les grandes collections.
+
+  # Pic mémoire transitoire : des allocations libérées dans l'appel même.
+  - id: memory-spike-transient
+    name: "Pic mémoire transitoire"
+    description: "La fonction atteint un pic mémoire élevé par appel alors que sa consommation résiduelle peut être faible — allocations massives puis libérées."
+    severity: medium
+    effort: medium
+    controllability: controllable
+    match:
+      peak_memory_per_call_threshold_mb: ">=30"
+    recommendation: |
+      Fractionnez le travail : traitements par lots, générateurs,
+      lectures en flux. Un pic transitoire répété fixe le plancher de
+      memory_limit requis et fragilise les requêtes concurrentes.
+
+  # ─── Code smells détectables au profil ─────────────────────────────────
+
+  # Résidus de debug : jamais légitimes dans un chemin profilé en prod.
+  - id: debug-leftovers
+    name: "Résidus de debug"
+    description: "var_dump/print_r/dd… observés dans la trace : instrumentation oubliée dans le chemin exécuté."
+    severity: high
+    effort: low
+    controllability: controllable
+    match:
+      function_pattern: "^(var_dump|print_r|var_export|debug_zval_dump|error_log|dd|dump)$"
+      call_count_threshold: ">=1"
+    recommendation: |
+      Retirez ces appels (ou passez par un logger conditionné par
+      l'environnement). Au-delà du coût, ils fuient des données internes.
+
+  # Attente active dans le chemin de la requête.
+  - id: blocking-sleep
+    name: "Attente bloquante dans la requête"
+    description: "sleep/usleep exécuté dans le chemin profilé : le processus attend sans rien produire."
+    severity: high
+    effort: low
+    controllability: controllable
+    match:
+      function_pattern: "^(sleep|usleep|time_nanosleep|time_sleep_until)$"
+      call_count_threshold: ">=1"
+    recommendation: |
+      Remplacez l'attente par un mécanisme d'événement (polling côté
+      client via file d'attente, retry avec backoff hors requête, lock
+      conditionnel) plutôt que de bloquer un worker.
+
+  # array_merge en boucle : copie quadratique.
+  - id: array-merge-in-loop
+    name: "array_merge répété"
+    description: "array_merge appelé de nombreuses fois depuis un même site — recopie croissante des tableaux à chaque fusion."
+    severity: medium
+    effort: low
+    controllability: controllable
+    match:
+      function_pattern: "^array_merge$"
+      call_count_threshold: ">=10"
+    recommendation: |
+      Accumulez avec $acc[] = … puis un merge final, ou utilisez += /
+      array_replace selon la sémantique souhaitée ; array_merge recopie
+      tout le tableau à chaque appel (coût quadratique).
+
+  # in_array répété : scan linéaire là où un hachage suffit.
+  - id: linear-scan-in-loop
+    name: "Recherche linéaire répétée"
+    description: "in_array appelé de nombreuses fois depuis un même site — scan O(n) là où isset() est O(1)."
+    severity: medium
+    effort: low
+    controllability: controllable
+    match:
+      function_pattern: "^in_array$"
+      call_count_threshold: ">=10"
+    recommendation: |
+      Indexez la référence : flip() une fois puis isset($lookup[$k]),
+      ou construisez directement un tableau associatif en amont.
+
+  # Hachage coûteux répété : password_* est volontairement lent.
+  - id: slow-hash-repeated
+    name: "Hachage coûteux répété"
+    description: "password_hash/password_verify appelés plusieurs fois par trace — conçus pour être lents (~100 ms chacun)."
+    severity: high
+    effort: medium
+    controllability: partial
+    match:
+      function_pattern: "^(password_hash|password_verify|crypt|hash_pbkdf2)$"
+      call_count_threshold: ">=3"
+    recommendation: |
+      Ne re-vérifiez jamais un mot de passe à chaque requête : authentifiez
+      une fois puis session/JWT. Si le cas est légitime (login), vérifiez
+      que le cost factor reste calibré (~100 ms, pas plus).
+
+  # Calcul dupliqué probable — sans vérification des arguments, absents du
+  # format XHProf ; heuristique faible assumée, à confirmer avant correction.
   - id: duplicated-calculation
     name: "Calcul dupliqué probable"
     description: "La même fonction est appelée plusieurs fois depuis un même site d'appel au sein d'une trace. Les arguments ne sont pas comparés (non disponibles dans le profil)."
@@ -39,30 +308,19 @@ rules:
       Memoïsez le résultat avec un cache local ou un décorateur, après
       avoir vérifié que les arguments sont identiques d'un appel à l'autre.
 
-  # Exemple 3 : requête SQL répétée — pattern N+1 typique
-  # (heuristique « in-loop »)
-  - id: n-plus-one-query
-    name: "Requête N+1 probable"
-    description: "Une fonction SQL est appelée de nombreuses fois depuis un même site — typiquement une itération qui déclenche sa propre requête."
-    severity: critical
-    effort: medium
-    controllability: controllable
-    match:
-      function_pattern: "^(PDO|mysqli_|pg_query|Doctrine\\\\)"
-      call_count_threshold: ">=3"
-    recommendation: |
-      Utilisez un fetch batch (fetchJoin, eager loading) ou une requête
-      agrégée unique au lieu de requêter à chaque itération.
+  # ─── ORM (connaissance framework, volontairement générique) ────────────
 
-  # Exemple 4 : allocation mémoire importante par appel
-  - id: memory-heavy-allocation
-    name: "Allocation mémoire importante"
-    description: "La fonction consomme en moyenne beaucoup de mémoire par appel."
-    severity: medium
-    effort: low
-    controllability: controllable
+  # Hydratation ligne à ligne massive côté Doctrine.
+  - id: doctrine-hydration-storm
+    name: "Tempête d'hydratation Doctrine"
+    description: "Le sous-système d'hydratation Doctrine est sollicité massivement — entités matérialisées une à une."
+    severity: high
+    effort: medium
+    controllability: partial
     match:
-      memory_per_call_threshold_mb: ">=10"
+      function_pattern: "^Doctrine\\\\.*Hydrat"
+      call_count_threshold: ">=10"
     recommendation: |
-      Traitez les données par flux (streaming) au lieu de tout charger en
-      mémoire ; utilisez des générateurs (yield) sur les grandes collections.
+      Préférez les hydrations array/scalar pour les listes, limitez les
+      colonnes (SELECT partiel), ou utilisez des DTO projetés. Réservez
+      l'hydratation objet aux cas où le graphe d'entités sert réellement.

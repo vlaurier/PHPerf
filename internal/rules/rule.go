@@ -58,10 +58,31 @@ type Rule struct {
 
 // Match — critères de déclenchement de la règle. Au moins un critère est
 // requis ; les critères définis se combinent en ET.
+//
+// Deux périmètres d'observation :
+//   - par site d'appel : function_pattern (sur le callee) et
+//     call_count_threshold (heuristique « in-loop ») ;
+//   - par callee, agrégés sur tous ses sites d'appel :
+//     memory_per_call_threshold_mb et peak_memory_per_call_threshold_mb
+//     (ΣMU|ΣPMU / ΣCT), inclusive_wt_ms_threshold / exclusive_wt_ms_threshold
+//     (temps du nœud, l'exclusif étant le temps propre hors enfants),
+//     time_share_percent_threshold (part du wall time total de la trace,
+//     0–100), caller_count_threshold (nombre de sites distincts).
+//
+// exclude_pattern (regexp sur le callee) retire des faux positifs : un
+// callee qui y correspond est ignoré par la règle, même si tous les autres
+// critères passent — typiquement pour réserver une règle de temps aux
+// fonctions de calcul et non aux familles d'I/O.
 type Match struct {
-	FunctionPattern          string     `yaml:"function_pattern,omitempty"`             // regexp sur le callee
-	CallCountThreshold       *Threshold `yaml:"call_count_threshold,omitempty"`         // appels caller→callee ≥ seuil
-	MemoryPerCallThresholdMB *Threshold `yaml:"memory_per_call_threshold_mb,omitempty"` // Mo/appel ≥ seuil
+	FunctionPattern           string     `yaml:"function_pattern,omitempty"`
+	ExcludePattern            string     `yaml:"exclude_pattern,omitempty"`
+	CallCountThreshold        *Threshold `yaml:"call_count_threshold,omitempty"`
+	MemoryPerCallThresholdMB  *Threshold `yaml:"memory_per_call_threshold_mb,omitempty"`      // Mo/appel ≥ seuil
+	PeakMemPerCallThresholdMB *Threshold `yaml:"peak_memory_per_call_threshold_mb,omitempty"` // pic Mo/appel ≥ seuil
+	InclusiveWTMsThreshold    *Threshold `yaml:"inclusive_wt_ms_threshold,omitempty"`         // temps inclusif ≥ X ms
+	ExclusiveWTMsThreshold    *Threshold `yaml:"exclusive_wt_ms_threshold,omitempty"`         // temps propre ≥ X ms
+	TimeSharePercentThreshold *Threshold `yaml:"time_share_percent_threshold,omitempty"`      // part de trace ≥ X %
+	CallerCountThreshold      *Threshold `yaml:"caller_count_threshold,omitempty"`            // sites distincts ≥ N
 }
 
 // Threshold — seuil au format ">=N" ou ">=N.N". Seul opérateur supporté en

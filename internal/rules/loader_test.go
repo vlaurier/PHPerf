@@ -131,6 +131,14 @@ func TestLoad_Errors(t *testing.T) {
 			wantErr: "function_pattern",
 		},
 		{
+			name: "regexp d'exclusion invalide",
+			data: `rules:
+  - {id: ok, name: n, description: d, severity: low, effort: low,
+     controllability: none, match: {call_count_threshold: ">=1", exclude_pattern: "("}}
+`,
+			wantErr: "exclude_pattern",
+		},
+		{
 			name: "seuil sans opérateur",
 			data: `rules:
   - {id: ok, name: n, description: d, severity: low, effort: low,

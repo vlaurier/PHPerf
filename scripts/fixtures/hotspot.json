@@ -1,0 +1,5 @@
+{
+  "main()": { "ct": 1, "wt": 100000, "cpu": 95000, "mu": 1000000, "pmu": 900000 },
+  "main()==>App\\Search::rank": { "ct": 1, "wt": 70000, "cpu": 68000, "mu": 800000, "pmu": 700000 },
+  "App\\Search::rank==>App\\Cache::warm": { "ct": 1, "wt": 5000, "cpu": 4800, "mu": 100000, "pmu": 90000 }
+}

@@ -31,8 +31,14 @@
       "type": "object",
       "properties": {
         "function_pattern": { "type": "string" },
+        "exclude_pattern": { "type": "string" },
         "call_count_threshold": { "type": "string", "pattern": "^>=[0-9]+$" },
-        "memory_per_call_threshold_mb": { "type": "string", "pattern": "^>=[0-9]+(\\.[0-9]+)?$" }
+        "caller_count_threshold": { "type": "string", "pattern": "^>=[0-9]+$" },
+        "memory_per_call_threshold_mb": { "type": "string", "pattern": "^>=[0-9]+(\\.[0-9]+)?$" },
+        "peak_memory_per_call_threshold_mb": { "type": "string", "pattern": "^>=[0-9]+(\\.[0-9]+)?$" },
+        "inclusive_wt_ms_threshold": { "type": "string", "pattern": "^>=[0-9]+(\\.[0-9]+)?$" },
+        "exclusive_wt_ms_threshold": { "type": "string", "pattern": "^>=[0-9]+(\\.[0-9]+)?$" },
+        "time_share_percent_threshold": { "type": "string", "pattern": "^>=[0-9]+(\\.[0-9]+)?$" }
       },
       "additionalProperties": false,
       "minProperties": 1

@@ -16,17 +16,31 @@ produire des **findings** (avec suggestions de fix).
 
 ```yaml
 rules:
-  - id: <string, unique>
+  - id: <string, unique ^[a-z0-9-]+$>
     name: <string>
     description: <string>
     severity: critical|high|medium|low
     effort: low|medium|high
     controllability: controllable|partial|none
     match:
-      function_pattern: <regex>
-      ...
+      function_pattern: <regex>            # regexp sur le callee
+      exclude_pattern: <regex>             # callee ignoré (anti faux positifs)
+      call_count_threshold: ">=N"          # par site d'appel (heuristique in-loop)
+      caller_count_threshold: ">=N"        # sites d'appel distincts du callee
+      memory_per_call_threshold_mb: ">=X"  # ΣMU/ΣCT tous sites confondus
+      peak_memory_per_call_threshold_mb: ">=X" # ΣPMU/ΣCT
+      inclusive_wt_ms_threshold: ">=X"     # temps inclusif du nœud en ms
+      exclusive_wt_ms_threshold: ">=X"     # temps propre (hors enfants) en ms
+      time_share_percent_threshold: ">=X"  # part du wall time total, 0–100
     recommendation: <string, conseils de fix>
 ```
+
+Deux périmètres d'observation : **par site d'appel** (`function_pattern`,
+`call_count_threshold` — heuristique « in-loop ») et **par callee agrégé**
+(seuils mémoire, temps, fan-out). Les critères définis se combinent en ET ;
+au moins un critère positif est requis (`exclude_pattern` seul ne suffit pas).
+Les unités des seuils sont celles de l'usage (ms, %, Mo) : la conversion
+depuis les µs/octets internes se fait dans le moteur.
 
 ## Types clés à créer
 
