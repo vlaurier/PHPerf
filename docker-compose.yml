@@ -16,7 +16,7 @@ services:
       context: .
     ports:
       - "${PHPERF_PORT:-8080}:8080"
-    command: sh -c "go build -o bin/phperf ./cmd/phperf && exec ./bin/phperf"
+    command: sh -c "go build -buildvcs=false -o bin/phperf ./cmd/phperf && exec ./bin/phperf --profile=scripts/fixtures/nplus1.json --rules=proto/rules.example.yaml"
     init: true
     <<: *go-env
 

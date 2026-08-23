@@ -176,6 +176,9 @@ ineffassign + gosimple + unparam + misspell + revive + ...
 
 ## 7. Règles (non-exhaustives) — à enrichir
 
+- **Messages de commit en anglais** (une ligne, impératif, sans préfixe de
+  jalon superflu si le message se suffit).
+
 - XHProf comme backing par défaut ; architecture prévue pour plugins
   (php-spx, phpspy).
 - SQLite fichier unique — schema dans `internal/storage/`.

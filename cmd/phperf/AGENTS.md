@@ -4,26 +4,30 @@
 
 ## Responsabilité
 
-**Thin wrapper** : point d’entrée du **binaire web UI**.
-→ Wiring DI + `http.ListenAndServe`. **Aucune logique métier.**
+**Thin wrapper** : point d'entrée du **binaire web UI**. Flags, wiring du
+pipeline (collector → analyzer → rules → scorer), ouverture SQLite,
+démarrage HTTP. Aucune logique métier.
 
-## Structure attendue
+## Implémentation actuelle
 
-```go
-package main
+- Flags : `--profile --rules [--scoring] [--db=.phperf.db] [--addr=:8080]`.
+- `run()` retourne ses erreurs au lieu de `log.Fatal` en ligne : les
+  `defer` (fermeture de la base) doivent pouvoir s'exécuter (`gocritic
+  exitAfterDefer`).
+- `evaluate()` — même wiring que `cmd/phperf-ci/pipeline.go`. **Duplication
+  volontaire** : deux binaires indépendants, pas de package partagé entre
+  `cmd/*`.
+- `toView()` — conversion `scorer.Scored` → vues `report.Finding`
+  (l'ordre de priorité décroissante de `Score` est conservé).
 
-func main() {
-    // 1. Charger config (.phperf.yaml ou flags)
-    // 2. Bootstrap DI (storage, ui.Server, rules.Engine, scorer.Scorer)
-    // 3. http.ListenAndServe(...)
-}
-```
-
-## Ce qu’il ne faut PAS
+## Ce qu'il ne faut PAS
 
 - AUCUN code métier ici → tout va dans `internal/`.
-- Aucun matching, scoring, collection → délègre.
 
 ## Références croisées
 
-- Consomme : `internal/ui/`, `internal/storage/`, `internal/rules/`, `internal/scorer/`, `internal/analyzer/`.
+- Consomme : `internal/ui/`, `internal/report/`, `internal/storage/`,
+  `internal/rules/`, `internal/scorer/`, `internal/analyzer/`,
+  `internal/collector/`.
+- Service compose `web` : lance le binaire sur la fixture de démo
+  (`scripts/fixtures/nplus1.json`), port `${PHPERF_PORT:-8080}`.

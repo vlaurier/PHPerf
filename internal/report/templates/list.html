@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{.Title}}</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 2rem auto; max-width: 60rem; padding: 0 1rem; color: #1a1a2e; }
+  h1 { font-size: 1.4rem; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { padding: .45rem .6rem; border-bottom: 1px solid #ddd; text-align: left; vertical-align: top; }
+  th { background: #f5f5f7; }
+  tr[data-severity="critical"] .priority { color: #b00020; font-weight: 700; }
+  tr.masked td { opacity: .45; }
+  .reco { white-space: pre-line; color: #444; font-size: .95rem; margin-top: .25rem; }
+  .meta { color: #777; font-size: .85rem; margin-top: .2rem; }
+  code { background: #f0f0f3; padding: .05rem .3rem; border-radius: 3px; }
+  form { display: inline; }
+  button { cursor: pointer; }
+</style>
+</head>
+<body>
+<h1>{{.Title}}</h1>
+
+<p>
+  {{if .ShowMasked}}
+    <a href="/">Masquer les findings masqués</a>
+  {{else if gt .MaskedCount 0}}
+    <a href="/?show_masked=1">Afficher les {{.MaskedCount}} finding(s) masqué(s)</a>
+  {{end}}
+</p>
+
+<table>
+<thead>
+<tr><th>Priorité</th><th>Gravité</th><th>Finding</th><th>Actions</th></tr>
+</thead>
+<tbody>
+{{range .Findings}}
+<tr data-severity="{{.Severity}}"{{if .Masked}} class="masked"{{end}}>
+  <td class="priority">{{printf "%.1f" .Priority}}</td>
+  <td>{{.Severity}}</td>
+  <td>
+    <strong>{{.RuleID}}</strong> — <code>{{.Function}}</code>
+    <div class="reco">→ {{.Recommendation}}</div>
+    <div class="meta">{{.CallCount}} appel(s) depuis <code>{{.Caller}}</code> ·
+      effort : {{.Effort}} · maîtrise : {{.Controllability}} ·
+      {{printf "%.1f" (mul100 .TimeShare)}} % du temps total</div>
+  </td>
+  <td>
+    {{if .Masked}}
+    <form method="post" action="/unmask"><input type="hidden" name="key" value="{{.Key}}"><button>Démasquer</button></form>
+    {{else}}
+    <form method="post" action="/mask"><input type="hidden" name="key" value="{{.Key}}"><button>Masquer</button></form>
+    {{end}}
+  </td>
+</tr>
+{{else}}
+<tr><td colspan="4">Aucun finding — le profil ne déclenche aucune règle.</td></tr>
+{{end}}
+</tbody>
+</table>
+</body>
+</html>

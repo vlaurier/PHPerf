@@ -2,7 +2,7 @@ COMPOSE := docker compose
 DC_RUN  := $(COMPOSE) run --rm app
 
 .DEFAULT_GOAL := help
-.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer tests-baseline ci-demo check build shell up down logs clean
+.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer tests-baseline tests-storage tests-report tests-ui ci-demo check build shell up down logs clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -41,6 +41,15 @@ tests-scorer: ## Tests du package scorer
 
 tests-baseline: ## Tests du package baseline
 	$(DC_RUN) go test -race -cover ./internal/baseline/
+
+tests-storage: ## Tests du package storage
+	$(DC_RUN) go test -race -cover ./internal/storage/
+
+tests-report: ## Tests du package report
+	$(DC_RUN) go test -race -cover ./internal/report/
+
+tests-ui: ## Tests du package ui
+	$(DC_RUN) go test -race -cover ./internal/ui/
 
 ci-demo: ## Démo CI : baseline puis run sur la fixture nplus1 (exit 0 attendu)
 	$(DC_RUN) bash -ec 'go build -buildvcs=false -o bin/phperf-ci ./cmd/phperf-ci \

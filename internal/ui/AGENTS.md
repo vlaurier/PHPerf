@@ -4,35 +4,37 @@
 
 ## Responsabilité
 
-**Interface web** (HTTP handlers + templates) pour explorer les profils,
-visualiser les findings priorisés, gérer le **masquage/triage**, et
-ajuster les scores.
+**Serveur HTTP de triage** : liste des findings priorisés (une page),
+masquage/démasquage persisté via le `Store`. Zéro logique métier : les
+findings arrivent déjà scorés et convertis en vues `report.Finding` par le
+wiring de `cmd/phperf`.
 
-## Tech stack
+## Implémentation actuelle
 
-- Go `net/http` standard (ou `spf13/cobra` pour routing léger).
-- Templates HTML natifs Go (`html/template`) — **0 JS framework**.
-- CSS minimal (Bootstrap CDN ou simple).
+- `Store` — interface **définie côté consommateur** (`AddMask`,
+  `RemoveMask`, `MaskedKeys`) ; implémentée par `*storage.DB` sans que ce
+  package ne l'importe.
+- `Server` — titre + liste de référence (ordre de priorité conservé) + store ;
+  construit par `NewServer`, exposé via `Handler()`.
+- Routes : `GET /` (liste ; `?show_masked=1` pour voir les masqués),
+  `POST /mask` et `POST /unmask` (form `key=<clé stable>` puis redirect 303).
+- Le rendu est délégué à `report.RenderHTML` — pas de template ici.
 
-## Types clés à créer
+## Ce qu'il ne faut PAS
 
-- `Server` — HTTP server (configuration, DI)
-- `Handler` — handlers pour : `/`, `/profiles`, `/findings`, `/mask`, `/rules`
-- `TemplateRenderer` — wrapper autour de `html/template`
-
-## Ce qu’il ne faut PAS
-
-- Aucune logique de scoring/matching/analyse → délègue à `scorer/`, `rules/`, `storage/`.
-- `cmd/phperf/` est le **thin wrapper** → wiring DI + `http.ListenAndServe` uniquement.
+- Aucun import des couches métier (`collector`, `analyzer`, `rules`,
+  `scorer`) ni de `storage` en direct : uniquement `report` + l'interface
+  `Store` locale (cf. matrice racine).
+- Aucune logique de filtrage/scoring au-delà du masquage affichage.
 
 ## Tests
 
-- Tests HTTP avec `httptest` (table-driven).
-- Vérifier les status codes + le masquage via l’UI.
+- `httptest` + store en mémoire (`memStore`) et store en échec (`errStore`)
+  pour les chemins 500 ; validation des méthodes HTTP (405) et de la clé
+  requise (400).
 
 ## Références croisées
 
-- Dépend de : `internal/storage/` (lecture) et `internal/report/` (rendu
-  HTML). **Jamais** les couches métier directement (`collector`, `analyzer`,
-  `rules`, `scorer`) — cf. matrice racine.
-- Point d’entrée : `cmd/phperf/`.
+- Point d'entrée : `cmd/phperf/`.
+- Rendu : `internal/report/` ; persistance : `internal/storage/`
+  (via l'interface, jamais en direct).

@@ -15,3 +15,6 @@
 # se versionne au contraire avec le code.
 /.phperf-baseline.json
 /.phperf-demo.json
+
+# Base SQLite locale de triage (masquage) — état personnel, non versionnée.
+/.phperf.db

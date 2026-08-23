@@ -4,28 +4,36 @@
 
 ## Responsabilité
 
-**Générer des rapports exportables** (HTML, JSON) à partir des findings
-et scores — pour l’UI, la CI, ou le partage.
+**Rendu des findings en vues exportables** : page HTML autonome (template
+embarqué) et JSON machine. Moteur de rendu **passif** : le filtrage
+(masqués visibles ou non) est du ressort de l'appelant (`ui`).
 
-## Sorties attendues
+## Implémentation actuelle
 
-- `HTMLReport` — page web autonome (findings, scores, graphe call, masquage)
-- `JSONReport` — format machine (par ex. pour ingestion CI/CD, GitHub Checks)
-- `ConsoleReport` — sortie texte pour `phperf-ci` (résultats visibles en logs CI)
+- `Finding` — DTO de vue (identité stable, sévérité/effort/maîtrise,
+  recommandation, métriques d'evidence, priorité, état masqué). Le package
+  définit **ses propres types** : aucun import métier → matrice depguard
+  inchangée ; la conversion se fait dans le wiring de `cmd/*`.
+- `Data` — `{Title, Findings, MaskedCount, ShowMasked}`.
+- `RenderHTML(w, Data)` — template `templates/list.html` embarqué
+  (`go:embed`), échappement XSS natif de `html/template`.
+- `JSON(Data)` — JSON indenté pour consommation machine.
 
-## Types clés à créer
+## Ce qu'il ne faut PAS
 
-- `Generator` — interface (`Generate(ctx, findings, scores) ([]byte, error)`)
-- `HTMLGenerator`, `JSONGenerator`, `ConsoleGenerator`
+- Aucune logique de scoring/matching, aucune persistance, aucun import
+  métier ni `storage` (cf. matrice racine).
+- Pas de filtrage ici : `ShowMasked` ne pilote que le lien de bascule du
+  template.
 
-## Ce qu’il ne faut PAS
+## Sorties
 
-- Aucune logique de scoring ou matching — consomme des données déjà calculées.
-- Aucune persistance — lecture via `storage/` si besoin.
+- HTML : servi par `internal/ui/` (page unique).
+- JSON : disponible pour ingestion CI/CD ultérieure.
+- La sortie console de `phperf-ci` vit dans `cmd/phperf-ci/pipeline.go`
+  (`printRunReport`) et non ici.
 
-## Références croisées
+## Tests
 
-- Entrée : findings/scores déjà calculés — passés en paramètres ou relus
-  depuis `internal/storage/`. **Pas d’import direct** des couches métier
-  (`collector`, `analyzer`, `rules`, `scorer`) — cf. matrice racine.
-- Sortie : `cmd/phperf-ci/` (console), `internal/ui/` (HTML)
+- Rendu : contenu, ordre conservé, échappement (`<script>`), états vides,
+  erreurs d'écriture (`failWriter`), round-trip JSON.

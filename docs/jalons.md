@@ -18,13 +18,15 @@
 | 2 | Moteur de règles YAML (`internal/rules`) | ✅ Fait |
 | 3 | Scoreur de priorité (`internal/scorer`) | ✅ Fait |
 | 4 | Baseline CI (`baseline`, `phperf-ci`) — storage déplacé au 5 | ✅ Fait |
-| 5 | Rapports & UI web (`report`, `ui`, service `web`) | ⬜ À faire |
+| 5 | Rapports & UI web (`report`, `ui`, `storage`, service `web`) | ✅ Fait |
 
-Qualité : `make check` vert sur les jalons 0-4 ; couverture **100 %**
+Qualité : `make check` vert sur les jalons 0-5 ; couverture **100 %**
 constatée sur les cinq packages métier (`collector`, `analyzer`, `rules`,
-`scorer`, `baseline`) ; complexité ≤ 15 vérifiée par `cyclop`. Contrat
-d'exit codes de `phperf-ci` vérifié en conditions réelles (0 sur baseline
-à jour, 1 sur nouveaux findings — démo `make ci-demo`).
+`scorer`, `baseline`) ; packages d'infrastructure entre 91 et 98 %
+(`report`, `storage`, `ui` — branches restantes : erreurs driver/scan
+inatteignables sans injection) ; complexité ≤ 15 vérifiée par `cyclop`.
+Contrat d'exit codes de `phperf-ci` vérifié en conditions réelles (0 sur
+baseline à jour, 1 sur nouveaux findings — démo `make ci-demo`).
 
 Repo git initialisé le 22/08/2026 (branche `main`, premier commit `f5f653a`).
 
@@ -239,11 +241,43 @@ Livré :
   round-trip, diff mixte/vide/tout-connu) ; cible `make ci-demo`
   (baseline puis run sur la fixture nplus1).
 
-### Jalon 5 — Rapports & UI web (`report`, `ui`, service `web`)
+### Jalon 5 — Storage, rapports & UI web (`storage`, `report`, `ui`, `cmd/phperf`) — FAIT
 
-- Rapport HTML/JSON (`internal/report`), UI minimaliste : liste des
-  findings, scores, suggestions, boutons de masquage ; servi par
-  `cmd/phperf` (service compose `web`, port 8080).
+Décisions validées avec le pilote (23/08/2026) :
+
+- **UI d'abord** : le service `web` consomme la fixture de démo
+  (`scripts/fixtures/nplus1.json`) ; la collecte PHP réelle devient un
+  jalon dédié ensuite.
+- **Profil chargé en mémoire au démarrage** ; SQLite ne persiste **que les
+  masques** (clés stables traitées comme chaînes opaques). Le masquage est
+  un état personnel local (`.phperf.db`, non versionné) — la CI reste
+  autonome sur le fichier baseline ; un export masques→baseline pourra
+  s'ajouter plus tard si besoin.
+- **Report = DTO de vue propres** (`report.Finding` construits par le
+  wiring `cmd/*`) : aucun import métier dans `report`/`ui`, la matrice
+  depguard n'a pas bougé. Le rendu est passif : le filtrage des masqués
+  appartient à l'UI (`?show_masked=1`).
+- Driver SQLite : `modernc.org/sqlite` pur Go (décision du jalon 4).
+
+Livré :
+
+- `internal/storage/storage.go` — table unique `masks(key, created_at)`,
+  migrations idempotentes à chaque ouverture, API idempotente
+  (`AddMask`/`RemoveMask`/`MaskedKeys`) ;
+- `internal/report/` — vues `Finding`/`Data`, `RenderHTML`
+  (template embarqué `go:embed`, échappement XSS natif), `JSON()` ;
+- `internal/ui/server.go` — interface `Store` définie côté consommateur,
+  routes `GET /`, `POST /mask`, `POST /unmask` (redirect 303) ;
+- `cmd/phperf` — flags `--profile --rules [--scoring] [--db] [--addr]`,
+  pipeline en mémoire, conversion vers les vues report ; service compose
+  `web` mis à jour (fixture de démo, `-buildvcs=false`) ;
+- cibles make `tests-storage`, `tests-report`, `tests-ui`.
+
+### Jalon 6 — Collecte PHP réelle (proposition)
+
+Pont XHProf → JSON : script PHP d'instrumentation + exécution depuis Go
+(format déjà posé par `collector.DecodeRaw`). Questions ouvertes Q1
+ci-dessous à trancher avant de coder.
 
 Post-MVP : backends php-spx / phpspy, règles communautaires importables,
 suggestions LLM.
@@ -264,10 +298,11 @@ suggestions LLM.
   bizarre apparaît dans un commentaire, suspecter un reliquat.
 - **goconst** : le réglage `goconst.ignore-tests: true` fonctionne en v2 ;
   ne pas passer par `exclusions.rules` pour ça.
-- **Workflow convenu avec le pilote** : proposer les commandes et attendre
-  validation avant de les exécuter ; si une sortie d'erreur semble
-  incohérente, demander une sortie fraîche (un copier/coller obsolète a déjà
-  induit un mauvais diagnostic).
+- **Workflow convenu avec le pilote** : le pilote ne parvient pas à
+  copier/coller depuis opencode → l'IA exécute elle-même les commandes
+  (`make`, `docker compose run`, `git`) après les avoir annoncées ; si une
+  sortie d'erreur semble incohérente, demander une sortie fraîche (un
+  copier/coller obsolète a déjà induit un mauvais diagnostic).
 - Toujours relire un fichier après un passage de `golangci-lint fmt` avant
   d'éditer (le formatage peut avoir décalé les lignes).
 
