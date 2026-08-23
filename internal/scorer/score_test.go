@@ -38,13 +38,13 @@ func TestDefaultWeights_CoverAllEnums(t *testing.T) {
 
 	assert.Equal(t, map[rules.Effort]float64{
 		rules.EffortLow:    1.0,
-		rules.EffortMedium: 0.6,
-		rules.EffortHigh:   0.3,
+		rules.EffortMedium: 0.75,
+		rules.EffortHigh:   0.5,
 	}, w.Effort)
 	assert.Equal(t, map[rules.Controllability]float64{
 		rules.Controllable:   1.0,
-		rules.PartialControl: 0.6,
-		rules.NoControl:      0.3,
+		rules.PartialControl: 0.75,
+		rules.NoControl:      0.5,
 	}, w.Controllability)
 }
 
@@ -62,17 +62,17 @@ func TestScore_Formula(t *testing.T) {
 		{
 			name: "effort élevé pénalisé",
 			in:   finding("a", 0.5, rules.EffortHigh, rules.Controllable),
-			want: 15, // 100 × 0,5 × 0,3 × 1
+			want: 25, // 100 × 0,5 × 0,5 × 1
 		},
 		{
 			name: "contrôlabilité nulle pénalisée",
 			in:   finding("a", 0.5, rules.EffortLow, rules.NoControl),
-			want: 15, // 100 × 0,5 × 1 × 0,3
+			want: 25, // 100 × 0,5 × 1 × 0,5
 		},
 		{
 			name: "tous les poids combinés",
 			in:   finding("a", 0.9, rules.EffortMedium, rules.PartialControl),
-			want: 32.4, // 100 × 0,9 × 0,6 × 0,6
+			want: 50.625, // 100 × 0,9 × 0,75 × 0,75
 		},
 		{
 			name: "part de temps nulle",
@@ -99,7 +99,7 @@ func TestScore_Formula(t *testing.T) {
 func TestScore_SortedDescendingStable(t *testing.T) {
 	in := []rules.Finding{
 		finding("c", 0.2, rules.EffortLow, rules.Controllable),      // 20
-		finding("b", 0.9, rules.EffortMedium, rules.PartialControl), // 32,4
+		finding("b", 0.9, rules.EffortMedium, rules.PartialControl), // 50,625
 		finding("e", 0.5, rules.EffortLow, rules.Controllable),      // 50 (ex æquo)
 		finding("a", 0.5, rules.EffortLow, rules.Controllable),      // 50
 		finding("d", 0.4, rules.EffortLow, rules.Controllable),      // 40
@@ -113,7 +113,7 @@ func TestScore_SortedDescendingStable(t *testing.T) {
 	}
 	// Tri desc ; à priorité égale l'ordre d'entrée est conservé : « e »
 	// précède « a » dans la tranche d'entrée.
-	assert.Equal(t, []string{"e", "a", "d", "b", "c"}, keys)
+	assert.Equal(t, []string{"b", "e", "a", "d", "c"}, keys)
 }
 
 func TestScore_EmptyInput(t *testing.T) {

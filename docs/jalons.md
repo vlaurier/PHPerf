@@ -186,8 +186,13 @@ Formule v1 :
 
     Priority = 100 × TimeShare × poids_effort × poids_contrôlabilité
 
-Défauts : effort low=1.0 / medium=0.6 / high=0.3 ; contrôlabilité
-controllable=1.0 / partial=0.6 / none=0.3.
+Défauts (ajustés le 23/08/2026 avec le pilote) : effort low=1.0 / medium=0.75
+/ high=0.5 ; contrôlabilité controllable=1.0 / partial=0.75 / none=0.5.
+Modulation **modérée** (÷4 max combiné) : le temps mesuré doit rester le
+premier facteur de tri ; effort et contrôlabilité — déclarés par l'auteur
+de règles, jamais calculés — ne font que départager. La `severity` est
+**hors formule** (affichage seul) : l'inclure compterait deux fois une
+opinion face à la donnée mesurée.
 
 Livré :
 

@@ -69,20 +69,24 @@ calcul dupliqué, récursion profonde, allocation mémoire excessive.
 
 ### `internal/scorer` — priorisation
 
-Calcule pour chaque finding un score de priorité :
+Calcule pour chaque finding un score de priorité normalisé 0–100 :
 
 ```
-Priority = Impact × (1/Effort) × Controllability
+Priority = 100 × TimeShare × poids_effort × poids_contrôlabilité
 ```
 
-| Facteur | Valeurs |
-|---|---|
-| Impact | `% du temps total (wall)` × `nb d'appels` |
-| Effort | low=1, medium=2, high=3 (inversé dans la formule) |
-| Contrôlabilité | controllable=1.0, partial=0.5, none=0.2 |
+| Facteur | Origine | Valeurs par défaut |
+|---|---|---|
+| TimeShare | **mesuré** : part du wall time inclusif du callee dans la trace | — (pas de coefficient) |
+| Effort | **déclaré** par l'auteur de règles (type de correctif) | low=1.0, medium=0.75, high=0.5 |
+| Contrôlabilité | **déclaré** par l'auteur de règles (cause sous contrôle ?) | controllable=1.0, partial=0.75, none=0.5 |
 
-Les poids sont **ajustables** via config (YAML ou flags) ; la priorité par
-défaut reste automatique.
+Modulation volontairement modérée : le temps mesuré reste le premier
+facteur de tri. La `severity` est hors formule (affichage seul) — l'inclure
+compterait deux fois une opinion face à la donnée mesurée.
+
+Les poids sont **ajustables** via `proto/scoring.example.yaml` ; la
+priorité par défaut reste automatique (`scorer.DefaultWeights`).
 
 ### `internal/storage` — persistance SQLite
 

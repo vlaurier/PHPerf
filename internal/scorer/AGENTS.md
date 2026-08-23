@@ -4,33 +4,39 @@
 
 ## Responsabilité
 
-**Calculer le score de priorité** pour chaque Finding.
+**Calculer le score de priorité** (0–100) pour chaque Finding.
 
-Formule : `Priority = Impact × (1/Effort) × Controllability`
+Formule v1 : `Priority = 100 × TimeShare × poids_effort × poids_contrôlabilité`
 
-- **Impact** : `% du temps total` × `nb d’appels`
-- **Effort** : pondéré (low=1, medium=2, high=3) → inversé
-- **Controllability** : `controllable=1.0`, `partial=0.5`, `none=0.2`
-- Poids **ajustables** via config (yaml ou flags).
+- **TimeShare** : **mesuré** — part du wall time inclusif du callee dans la
+  trace (`rules.Evidence.TimeShare`) ; aucun coefficient ne lui est appliqué.
+- **Effort** / **Contrôlabilité** : **déclarés** par l'auteur de règles ;
+  défauts {1.0 / 0.75 / 0.5} — modulation modérée, le temps reste le
+  premier facteur de tri.
+- `severity` hors formule (affichage seul) : l'inclure compterait deux fois
+  une opinion face à la donnée mesurée.
+- Poids **ajustables** via `proto/scoring.example.yaml` ; défauts embarqués
+  (`DefaultWeights`).
 
-## Types clés à créer
+## Types clés
 
 - `Scorer` — calcule les scores à partir des Findings
-- `PriorityScore` — struct Score, FindingID, Breakdown (impact/effort/controle)
-- `Config` — poids configurables pour le scoring
+- `Scored` — finding + priorité ; tri décroissant stable
+- `WeightSet` + `LoadWeights` — pondérations validées (fichier ou défauts)
 
 ## Ce qu’il ne faut PAS
 
 - Aucune logique de matching → `rules/`.
-- Aucune persistance directe → `storage/` (via retour de Score).
+- Aucune persistance directe → `storage/`.
 
 ## Tests
 
-- Tests unitaires table-driven sur la formule de scoring.
-- Vérifier les seuils (ex : priority > 80 → critique).
+- Tests unitaires table-driven sur la formule et le tri (stabilité incluse).
+- Config : fusion sur défauts, clés inconnues/valeurs ≤ 0 rejetées.
 - Objectifs couverture/mutation : cf. racine `AGENTS.md` §5 (packages métier).
 
 ## Références croisées
 
-- Entrée : `internal/rules/` (Findings)
-- Sortie : `internal/storage/` (persisté), `cmd/phperf-ci/` (comparaison baseline), `internal/ui/` (affichage)
+- Entrée : `internal/rules/` (Findings avec `Evidence.TimeShare`)
+- Sortie : `cmd/phperf-ci/` (affichage), `internal/ui/`, `internal/report/`
+  (jalon 5), `internal/storage/` (persisté, jalon 5)

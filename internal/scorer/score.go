@@ -44,17 +44,23 @@ type Scorer interface {
 // DefaultWeights — pondérations embarquées, utilisées quand aucune
 // configuration n'est fournie : effort faible ⇒ poids fort (corriger vite
 // est prioritaire), maîtrise totale ⇒ poids fort.
+//
+// Modulation volontairement modérée (÷4 max combiné) : le temps mesuré
+// reste le premier facteur de tri, effort et contrôlabilité — déclarés par
+// l'auteur de règles — ne font que départager. La sévérité est hors
+// formule (affichage seul) : l'inclure compterait deux fois une opinion
+// face à la donnée mesurée.
 func DefaultWeights() WeightSet {
 	return WeightSet{
 		Effort: map[rules.Effort]float64{
 			rules.EffortLow:    1.0,
-			rules.EffortMedium: 0.6,
-			rules.EffortHigh:   0.3,
+			rules.EffortMedium: 0.75,
+			rules.EffortHigh:   0.5,
 		},
 		Controllability: map[rules.Controllability]float64{
 			rules.Controllable:   1.0,
-			rules.PartialControl: 0.6,
-			rules.NoControl:      0.3,
+			rules.PartialControl: 0.75,
+			rules.NoControl:      0.5,
 		},
 	}
 }

@@ -9,16 +9,17 @@
 
 scoring:
   weights:
-    # Effort estimé pour corriger : plus l'effort est faible, plus le poids
-    # est fort (corriger vite est prioritaire).
+    # Effort estimé pour corriger (déclaré par l'auteur de règles) : plus
+    # l'effort est faible, plus le poids est fort. Modulation volontairement
+    # modérée : le temps mesuré reste le premier facteur de tri.
     effort:
       low: 1.0
-      medium: 0.6
-      high: 0.3
+      medium: 0.75
+      high: 0.5
 
-    # Maîtrise de l'équipe sur la cause : plus la cause est sous contrôle,
-    # plus le poids est fort.
+    # Maîtrise de l'équipe sur la cause (déclaré par l'auteur de règles) :
+    # plus la cause est sous contrôle, plus le poids est fort.
     controllability:
       controllable: 1.0
-      partial: 0.6
-      none: 0.3
+      partial: 0.75
+      none: 0.5
