@@ -20,9 +20,11 @@ d'action exploitable :
 
 ## État du projet
 
-**En construction.** La structure, les conventions et les formats sont posés ;
-l'implémentation des packages `internal/` n'a pas encore commencé. Les
-commandes ci-dessous décrivent l'usage visé du produit.
+**Utilisable sur profils JSON.** Le pipeline complet est implémenté et
+testé (jalons 0–6) : normalisation XHProf, moteur de règles (catalogue de
+20 règles), scoring ajustable, baseline CI, UI web avec masquage persistant.
+La collecte automatique depuis une application PHP réelle est le prochain
+jalon (7) — voir [`docs/jalons.md`](docs/jalons.md).
 
 ## Démarrage rapide
 
@@ -33,11 +35,14 @@ goimports sont fournis par l'image du `Dockerfile` — version maîtrisée, rien
 ```bash
 make check    # lint + vet + tests — doit passer avant commit
 make build    # compile bin/phperf et bin/phperf-ci dans le conteneur
-make up       # interface web sur http://localhost:8080
+make up       # interface web de démonstration sur http://localhost:8080
 ```
 
 Toutes les cibles (`make help`) lancent les outils **dans le conteneur** :
 `fix`, `lint`, `vet`, `tests`, `check`, `build`, `shell`, `up`, `down`…
+
+Guide d'usage complet sur une vraie application :
+[`docs/utilisation.md`](docs/utilisation.md).
 
 ## Utilisation visée
 
@@ -67,9 +72,10 @@ considérés comme connus et ignorés jusqu'à correction ou régénération.
 ### Interface web
 
 ```bash
-bin/phperf
-# Explorer les profils, consulter les findings priorisés,
-# gérer le triage (masquage) dans le navigateur.
+bin/phperf --profile=profil.json --rules=proto/rules.example.yaml \
+           [--scoring=poids.yaml] [--db=.phperf.db] [--addr=:8080]
+# Explorer les findings priorisés, gérer le triage (masquage persistant
+# SQLite) dans le navigateur.
 ```
 
 ## Développement : tests & vérifications
@@ -88,10 +94,13 @@ Ces vérifications doivent passer à 100 % avant tout commit (détails dans
 
 ## Règles YAML
 
-Le moteur de règles est déclaratif et extensible :
+Le moteur de règles est déclaratif et extensible — **20 règles livrées**
+(N+1, hotspots CPU, I/O répétées, pics mémoire, résidus de debug…) :
 
-- Exemple complet commenté : [`proto/rules.example.yaml`](proto/rules.example.yaml)
+- Catalogue complet commenté : [`proto/rules.example.yaml`](proto/rules.example.yaml)
 - Schéma de validation : [`proto/rules.schema.json`](proto/rules.schema.json)
+- Critères disponibles : temps inclusif/exclusif, part de trace, mémoire
+  moyenne et pic, comptages d'appels/sites, patterns avec exclusions.
 
 ## Architecture en un coup d'œil
 

@@ -4,9 +4,6 @@
 # IDE
 /.idea/
 
-# OpenCode : dépendances locales uniquement (config versionnée)
-/.opencode/node_modules/
-
 # Artefacts Go (couverture, tests compilés)
 *.out
 *.test

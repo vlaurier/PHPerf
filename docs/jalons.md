@@ -1,6 +1,6 @@
 # Jalons & état d'implémentation — PHPerf
 
-> Document de continuité : destiné à l'IA (reprise entre sessions Opencode)
+> Document de continuité : destiné aux contributeurs et aux assistants IA
 > et aux contributeurs. **Mettre à jour à chaque jalon terminé.**
 >
 > - Vision produit & conventions : `AGENTS.md` (racine) + `AGENTS.md` par dossier.
@@ -323,22 +323,93 @@ Conformité : chaque famille a sa fixture dédiée (`scripts/fixtures/
 asserte les listes exactes de findings attendus (trigger ET non-trigger)
 sur les 7 fixtures.
 
-### Jalon 7 — Collecte PHP réelle (proposition)
+---
 
-Pont XHProf → JSON : script PHP d'instrumentation + exécution depuis Go
-(format déjà posé par `collector.DecodeRaw`). Questions ouvertes Q1
-ci-dessous à trancher avant de coder.
+## Jalons futurs (propositions détaillées — bilan avant mise en ligne, 23/08/2026)
 
-Post-MVP : packs de règles multi-fichiers (frameworks), backends php-spx /
-phpspy, suggestions LLM.
+### Jalon 7 — Collecte PHP réelle (pont XHProf → JSON)
+
+Objectif : profiler une vraie application de bout en bout. Le contrat Go
+existe déjà (`collector.DecodeRaw` lit le JSON canonique) — il reste à
+produire ce JSON depuis un runtime PHP.
+
+Deux modalités possibles (question ouverte Q1 ci-dessous) :
+
+1. **Script de collecte autonome** (recommandé pour démarrer) : un petit
+   script PHP (`phperf-collect.php`) active `xhprof_enable()`, inclut le
+   script cible (runner direct, ou `auto_prepend_file`/`auto_append_file`),
+   puis écrit le profil en JSON. Zéro couplage framework, reproductible en
+   CI, aucune dépendance ajoutée à l'app profilée. Limite : ne voit pas le
+   trafic HTTP existant sans instrumentation du point d'entrée.
+2. **Mini-bibliothèque applicative** (ensuite) : paquet Composer optionnel
+   (middleware/endpoint protégé) qui profile une requête réelle et écrit le
+   même dump JSON. Voit le vrai chemin de requête ; coût : dépendance dans
+   l'app + précautions de sécurité (endpoint désactivable, token).
+
+Livrables proposés : le script/modalité 1 + une sous-commande de collecte
+(ex. `phperf collect -- php mon-script.php` ou équivalent) + documentation
+du mode opératoire ; acceptance = profiler une page/script réel du pilote,
+de la collecte au rapport UI + CI.
+
+### Jalon 8 — Dédoublonnage des findings (`supersedes`)
+
+Constat (remonté par le pilote sur l'UI) : plusieurs règles peuvent tomber
+sur **le même callee** en décrivant le même problème — ex. une requête SQL
+dans une boucle déclenche à la fois `n-plus-one-query` (batcher) et
+`duplicated-calculation` (mémoïser) ; traiter le premier rend le second
+sans objet.
+
+Décision de principe (jugement assistant, à valider au moment du jalon) :
+
+- **D'abord l'option sémantique « supersedes »**, pas le simple
+  regroupement visuel :
+  - champ `supersedes: [id...]` dans le format de règle : la règle la plus
+    spécifique déclare celles qu'elle remplace ;
+  - moteur : quand règle R et une règle remplacée S tombent sur le **même
+    callee**, le finding de S est retiré (résolution transitive) ;
+  - loader : ids référencés doivent exister dans le jeu chargé (erreur
+    stricte sinon) ;
+  - baseline : une clé retirée disparaît proprement (amélioration) et
+    réapparaîtrait comme « nouveau » en cas de régression — signal correct
+    dans les deux sens ;
+  - câblage catalogue : `n-plus-one-query` et `slow-single-query`
+    remplacent `duplicated-calculation` sur les callees SQL (seuils
+    identiques ⇒ quand l'un sonne, l'autre a déjà sonné).
+- **Pourquoi pas seulement le regroupement UI (option C)** : il ne change
+  rien aux sorties CI (comptes, exit codes, rapport texte) où le bruit
+  compte autant ; il reste utile ensuite mais mérite d'être guidé par un
+  vrai retour d'usage (que veut voir côte à côte un développeur ?). Les
+  paires *complémentaires* restent volontairement affichées ensemble
+  (ex. `n-plus-one-query` + `dominant-subtree`) : remèdes différents.
+- Alternative rejetée faute de généralité : discipline de catalogue par
+  `exclude_pattern` uniquement (fonctionne pour la paire SQL, pas pour les
+  autres recouvrements, et enterre la connaissance au lieu de la déclarer).
+
+### Jalon 9 — Packs de règles multi-fichiers
+
+`--rules proto/rules.d/*.yaml` (ou répertoire) : cœur générique + packs par
+framework (Symfony, Laravel, WordPress…) maintenus séparément. Conditionne
+le modèle communautaire. Le format v1 reste inchangé ; seul le chargement
+s'étend (fusion stricte, ids globalement uniques).
+
+### Post-MVP ( backlog non planifié )
+
+- Backends alternatifs : php-spx (timeline), phpspy (échantillonnage bas
+  coût) — l'architecture collector→analyzer est prête.
+- Critère d'attente externe : ratio (wt−cpu)/wt pour distinguer calcul et
+  I/O-wait dans les hotspots.
+- Export masques → baseline (partager le triage local avec l'équipe).
+- Suggestions de correctifs assistées (LLM) sur les findings sans reco.
+- Rapport HTML autonome exportable (pièce jointe de CI).
 
 ---
 
 ## Questions ouvertes (TODO(phperf))
 
-1. Format exact du pont PHP→Go (JSON intermédiaire) et modalités de
-   collecte (script dédié ? intégration request HTTP ?) — impactera
-   `internal/collector`, à trancher au jalon 4.
+1. Modalités de collecte réelle (jalon 7) : script autonome vs
+   instrumentation applicative — la proposition détaillée ci-dessus
+   recommande de démarrer par le script autonome, le format JSON restant
+   le contrat stable entre les deux modalités.
 
 ## Leçons & conventions acquises en cours de route
 
@@ -348,19 +419,12 @@ phpspy, suggestions LLM.
   bizarre apparaît dans un commentaire, suspecter un reliquat.
 - **goconst** : le réglage `goconst.ignore-tests: true` fonctionne en v2 ;
   ne pas passer par `exclusions.rules` pour ça.
-- **Workflow convenu avec le pilote** : le pilote ne parvient pas à
-  copier/coller depuis opencode → l'IA exécute elle-même les commandes
-  (`make`, `docker compose run`, `git`) après les avoir annoncées ; si une
-  sortie d'erreur semble incohérente, demander une sortie fraîche (un
-  copier/coller obsolète a déjà induit un mauvais diagnostic).
 - Toujours relire un fichier après un passage de `golangci-lint fmt` avant
   d'éditer (le formatage peut avoir décalé les lignes).
 
 ## Reprendre le travail plus tard
 
-- Sessions Opencode : `opencode --continue` (dernière session) ou
-  `opencode session list` puis `opencode --session <id>` ; export possible
-  via `opencode export`.
-- Sinon : coller ce fichier (`docs/jalons.md`) dans une nouvelle session —
-  il résume l'état complet. Pointer également vers les `AGENTS.md` (lus
-  automatiquement).
+- Ce fichier (`docs/jalons.md`) résume l'état complet du projet : le
+  coller en contexte d'une nouvelle session — quel que soit l'outil —
+  suffit à reprendre. Pointer également vers les `AGENTS.md` (lus
+  automatiquement par la plupart des assistants).

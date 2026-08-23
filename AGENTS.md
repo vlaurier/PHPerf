@@ -1,6 +1,6 @@
 # AGENTS.md — PHPerf
 
-> Instructions globales pour l'IA (Opencode) — valables à la racine du projet.
+> Instructions globales pour l'IA — valables à la racine du projet.
 > Chaque sous-dossier contient son **propre** `AGENTS.md` avec des consignes
 > **spécifiques** à ce dossier. Ne pas y mettre de doublons.
 
@@ -160,7 +160,7 @@ ineffassign + gosimple + unparam + misspell + revive + ...
 - **Doc** : commenter chaque export avec `// Nom — description`.
 - **Dépendances** : justifier chaque import externe. Préférer stdlib.
 
-## 6. Directives pour l'IA (Opencode)
+## 6. Directives pour l'IA
 
 1. **Avant d'écrire**, lis les `AGENTS.md` du dossier courant ET ceux des
    parents. Agis uniquement sur ce qui concerne le dossier travaillé.
