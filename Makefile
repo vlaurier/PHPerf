@@ -2,7 +2,7 @@ COMPOSE := docker compose
 DC_RUN  := $(COMPOSE) run --rm app
 
 .DEFAULT_GOAL := help
-.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer tests-baseline tests-storage tests-report tests-ui ci-demo check build shell up down logs clean
+.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer tests-baseline tests-storage tests-report tests-ui ci-demo demo-collect e2e check build shell up down logs clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -55,6 +55,15 @@ ci-demo: ## Démo CI : baseline puis run sur la fixture nplus1 (exit 0 attendu)
 	$(DC_RUN) bash -ec 'go build -buildvcs=false -o bin/phperf-ci ./cmd/phperf-ci \
 		&& bin/phperf-ci baseline --profile=scripts/fixtures/nplus1.json --rules=proto/rules.example.yaml \
 		&& bin/phperf-ci run --profile=scripts/fixtures/nplus1.json --rules=proto/rules.example.yaml'
+
+demo-collect: ## Démo collecte réelle : profile le scénario PHP de démo (image php+xhprof) → bin/phperf-demo.json
+	docker build -q -t phperf-demo-php -f scripts/php/Dockerfile.demo scripts/php
+	docker run --rm -v $$PWD:/work -w /work phperf-demo-php \
+		php scripts/php/phperf-profile.php --output=bin/phperf-demo.json scripts/fixtures/php-demo/scenario.php
+	@echo "Profil : bin/phperf-demo.json — visualiser avec : make up PHPERF_PROFILE=bin/phperf-demo.json"
+
+e2e: ## Test E2E collecte→CI→UI (côté hôte, requiert Docker + réseau ; ~2 min à froid)
+	sh scripts/e2e.sh
 
 check: ## Tout vérifier d'un coup : lint + vet + tests
 	$(DC_RUN) bash -ec 'golangci-lint fmt --diff && golangci-lint run && go vet ./... && go test -race -cover ./...'

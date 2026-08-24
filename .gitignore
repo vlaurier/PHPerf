@@ -4,6 +4,9 @@
 # IDE
 /.idea/
 
+# Configurations locales d'outils de développement (non versionnées)
+/.opencode/
+
 # Artefacts Go (couverture, tests compilés)
 *.out
 *.test
@@ -15,3 +18,6 @@
 
 # Base SQLite locale de triage (masquage) — état personnel, non versionnée.
 /.phperf.db
+
+# Artefacts du test E2E (nettoyés par le script, résidus éventuels)
+/.e2e-*/

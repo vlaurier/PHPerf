@@ -35,11 +35,13 @@ goimports sont fournis par l'image du `Dockerfile` — version maîtrisée, rien
 ```bash
 make check    # lint + vet + tests — doit passer avant commit
 make build    # compile bin/phperf et bin/phperf-ci dans le conteneur
+make e2e      # test E2E collecte PHP réelle (côté hôte, ~2 min à froid)
 make up       # interface web de démonstration sur http://localhost:8080
 ```
 
 Toutes les cibles (`make help`) lancent les outils **dans le conteneur** :
 `fix`, `lint`, `vet`, `tests`, `check`, `build`, `shell`, `up`, `down`…
+La CI du dépôt exécute `make check` et `make e2e` sur chaque PR.
 
 Guide d'usage complet sur une vraie application :
 [`docs/utilisation.md`](docs/utilisation.md).

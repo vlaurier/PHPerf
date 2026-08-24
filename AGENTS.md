@@ -59,7 +59,8 @@ PHPerf/
 │   └── report/                  ← génération de rapports (HTML, JSON)
 ├── proto/                       ← schéma/example des règles
 │   └── rules.example.yaml
-├── scripts/                     ← scripts utiles (fixtures, build)
+├── scripts/                     ← scripts utiles (fixtures, build,
+│                                    intégrations PHP livrées aux users)
 └── docs/                        ← docs utilisateur (hors AGENTS.md)
 ```
 
@@ -103,6 +104,7 @@ make lint     # formatage + analyse statique (gofmt, goimports, golangci-lint)
 make vet      # go vet ./...
 make tests    # tests unitaires (+ race detector, couverture)
 make check    # lint + vet + tests — doit passer à 100 % avant commit
+make e2e      # E2E collecte PHP réelle (côté hôte : Docker+réseau ; hors gates)
 make build    # compile bin/phperf et bin/phperf-ci
 make up       # interface web sur http://localhost:8080
 make shell    # shell dans le conteneur dev

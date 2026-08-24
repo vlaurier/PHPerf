@@ -1,43 +1,93 @@
 # Guide d'utilisation — PHPerf
 
-> Mode opératoire cible pour utiliser PHPerf sur une application PHP.
-> Certaines briques sont encore en jalon (signalées « À venir ») : le guide
-> décrit l'expérience finale visée et ce qui fonctionne dès aujourd'hui.
+> Mode opératoire pour utiliser PHPerf sur une application PHP.
+> Les rares briques encore à venir sont signalées « À venir ».
 
 ## Prérequis
 
 | Composant | Rôle | Notes |
 |---|---|---|
 | Docker | Exécuter PHPerf et sa toolchain | Seul prérequis côté hôte |
-| PHP + extension `xhprof` | Produire le profil | Côté application profilée (À venir, jalon 7, pour la collecte automatique) |
+| PHP 8.x + extension `xhprof` | Produire le profil | Côté application profilée — installation ci-dessous |
 
-PHPerf n'est **pas** une dépendance Composer de votre application : c'est un
-outil externe qui lit un profil XHProf exporté en JSON. Votre code reste
-intouché.
+PHPerf n'est **pas** (encore) une dépendance Composer de votre application :
+c'est un outil externe qui lit un profil XHProf exporté en JSON. Votre code
+métier reste intouché — seuls deux fichiers de colle légers interviennent
+(scénario CLI ou config serveur HTTP).
 
 ## Étape 1 — Obtenir un profil
 
 Un « profil » est le dump XHProf de votre application, sérialisé en JSON
-(clés `parent==>enfant`, valeurs `ct/wt/cpu/mu/pmu`).
+(clés `parent==>enfant`, valeurs `ct/wt/cpu/mu/pmu`). PHPerf livre les
+scripts de collecte dans [`scripts/php/`](../scripts/php/) — copiez-les
+quelque part accessible par l'application (ou clonez le dépôt).
 
-**À venir (jalon 7)** — collecte intégrée :
-
-```bash
-# Modalité visée : script autonome, zéro impact sur l'app
-phperf collect -- php bin/console app:rapport-quotidien > profil.json
-```
-
-Deux modalités à l'étude (script autonome recommandé d'abord,
-instrumentation applicative ensuite) — voir `docs/jalons.md`, jalon 7.
-
-**Dès maintenant** — si vous disposez déjà d'un dump XHProf (serialize ou
-array), convertissez-le en JSON plat ; les fixtures de référence du format
-sont dans [`scripts/fixtures/`](../scripts/fixtures/). L'UI de démonstration
-du dépôt consomme la fixture `nplus1.json` :
+### (a) Installer ext-xhprof (une seule fois, côté infra)
 
 ```bash
-make up   # http://localhost:8080 sur la fixture de démo
+pecl install xhprof
+echo 'extension=xhprof.so' > "$(php -ini | awk '/^Scan this dir/{print $NF}')/xhprof.ini"
+php -m | grep xhprof   # doit afficher xhprof
 ```
+
+Sous Docker : `RUN pecl install xhprof && docker-php-ext-enable xhprof`.
+L'extension ne coûte rien tant qu'elle n'est pas activée ; activez-la
+uniquement sur les environnements où vous profilez (dev, CI…).
+
+### (b) Tâche CLI : le fichier scénario
+
+Créez `phperf-scenario.php` **à la racine de votre projet** — il boote
+l'application et lance la charge à profiler :
+
+```php
+<?php
+require __DIR__.'/vendor/autoload.php';
+// Boot maison (exemple Symfony) :
+$kernel = new App\Kernel('dev', true); $kernel->boot();
+// La charge à profiler :
+system('php bin/console app:rapport-quotidien');
+```
+
+Puis :
+
+```bash
+php /chemin/phperf-profile.php --output=profil.json phperf-scenario.php
+```
+
+Options utiles : `--no-cpu`, `--no-memory`, `--no-builtins` (déconseillé :
+plusieurs règles ciblent des fonctions natives). Un scénario qui plante
+produit quand même un profil partiel (exit code 1). Essayez sans rien
+installer avec la démo fournie :
+
+```bash
+make demo-collect   # → bin/phperf-demo.json via une image php+xhprof éphémère
+```
+
+### (c) Pages HTTP : zéro modification de code
+
+Déclarez l'amorce dans la config PHP du serveur (php.ini, pool FPM,
+`.htaccess` selon votre montage) :
+
+```ini
+auto_prepend_file = /chemin/phperf-prepend.php
+```
+
+C'est tout : l'amorce inclut elle-même la fin de chaîne. Le profilage ne
+s'active que si la variable d'environnement `PHPERF_PROFILE=1` est posée
+(sur une requête, un pod, un conteneur…) — les requêtes ordinaires ne paient
+rien. Chaque requête profile écrit un JSON horodaté dans
+`PHPERF_OUTPUT_DIR` (défaut : tmp système) et le signale dans les logs :
+
+```bash
+PHPERF_PROFILE=1 curl -s http://localhost:8080/rapports > /dev/null
+# → log "[phperf] profil écrit : /tmp/phperf-20260824-141233-a1b2c3.json"
+```
+
+### (d) Consommer le profil
+
+Tout ce qui suit accepte n'importe quel profil JSON obtenu ci-dessus :
+UI web (étape 3), baseline CI (étape 4). Les fixtures de référence du
+format sont dans [`scripts/fixtures/`](../scripts/fixtures/).
 
 ## Étape 2 — Comprendre le rapport
 
@@ -101,12 +151,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with: { php-version: '8.3', extensions: xhprof }
       - uses: actions/setup-go@v5
         with: { go-version: stable }
       - run: go install github.com/phperf/phperf/cmd/phperf-ci@latest
-      # Collecte du profil — À venir (jalon 7). En attendant, fournir
-      # un profil JSON par un moyen quelconque :
-      - run: ./scripts/generate-profile.sh > profil.json
+      # Wrapper de collecte (voir étape 1b) + scénario versionné chez vous.
+      - run: curl -fsSL https://raw.githubusercontent.com/phperf/phperf/main/scripts/php/phperf-profile.php -o phperf-profile.php
+      - run: php phperf-profile.php --output=profil.json phperf-scenario.php
       - run: phperf-ci run --profile=profil.json --rules=proto/rules.example.yaml
 ```
 
@@ -143,8 +195,12 @@ bin/phperf-ci run --profile=… --rules=… --scoring=scoring.yaml
 
 ## Workflow recommandé (résumé)
 
-1. **Profiler** l'app (jalon 7 automatisera cette étape).
+1. **Profiler** l'app — scénario CLI ou variable d'env HTTP (étape 1).
 2. **Explorer** les findings priorisés dans l'UI, masquer le bruit local.
 3. Corriger les priorités hautes ; **régénérer la baseline** quand c'est
    assumé.
 4. Laisser la **CI** garantir qu'aucun nouveau goulot n'entre sans revue.
+
+> À venir (jalon 8) : un package Composer `phperf/profile` absorbant la
+> configuration serveur et le fichier scénario pour les frameworks supportés
+> (Symfony, Laravel…) — `composer require` puis une commande unique.

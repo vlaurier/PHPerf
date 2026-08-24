@@ -22,7 +22,7 @@
 | 6 | Expressivité moteur + catalogue de règles (20 règles testées) | ✅ Fait |
 | 7 | Collecte PHP réelle (pont XHProf → JSON) | ⬜ À faire |
 
-Qualité : `make check` vert sur les jalons 0-6 ; couverture **100 %**
+Qualité : `make check` vert sur les jalons 0-7 ; couverture **100 %**
 constatée sur les cinq packages métier (`collector`, `analyzer`, `rules`,
 `scorer`, `baseline`) ; packages d'infrastructure entre 91 et 98 %
 (`report`, `storage`, `ui` — branches restantes : erreurs driver/scan
@@ -327,31 +327,72 @@ sur les 7 fixtures.
 
 ## Jalons futurs (propositions détaillées — bilan avant mise en ligne, 23/08/2026)
 
-### Jalon 7 — Collecte PHP réelle (pont XHProf → JSON)
+### Jalon 7 — Collecte PHP réelle : primitives PHP + documentation — FAIT
 
-Objectif : profiler une vraie application de bout en bout. Le contrat Go
-existe déjà (`collector.DecodeRaw` lit le JSON canonique) — il reste à
-produire ce JSON depuis un runtime PHP.
+Décisions (24/08/2026) :
 
-Deux modalités possibles (question ouverte Q1 ci-dessous) :
+- **Séquence en deux jalons** : primitives PHP autonomes d'abord
+  (fonctionnelles immédiatement), **package Composer ensuite** (jalon 8)
+  qui les emballera avec des adaptateurs framework — l'expérience
+  zéro-code est repoussée à ce second jalon, pas abandonnée.
+- **Pas de sous-commande Go `phperf collect`** pour l'instant : le wrapper
+  PHP affiche ses propres erreurs ; l'orchestration Go attendra qu'il y ait
+  une commande unique à orchestrer (après le package Composer).
+- **CLI + HTTP dès ce jalon** ; la paire prepend/append reste documentée
+  comme repli pour legacy sans Composer même après le jalon 8.
 
-1. **Script de collecte autonome** (recommandé pour démarrer) : un petit
-   script PHP (`phperf-collect.php`) active `xhprof_enable()`, inclut le
-   script cible (runner direct, ou `auto_prepend_file`/`auto_append_file`),
-   puis écrit le profil en JSON. Zéro couplage framework, reproductible en
-   CI, aucune dépendance ajoutée à l'app profilée. Limite : ne voit pas le
-   trafic HTTP existant sans instrumentation du point d'entrée.
-2. **Mini-bibliothèque applicative** (ensuite) : paquet Composer optionnel
-   (middleware/endpoint protégé) qui profile une requête réelle et écrit le
-   même dump JSON. Voit le vrai chemin de requête ; coût : dépendance dans
-   l'app + précautions de sécurité (endpoint désactivable, token).
+Livrables :
 
-Livrables proposés : le script/modalité 1 + une sous-commande de collecte
-(ex. `phperf collect -- php mon-script.php` ou équivalent) + documentation
-du mode opératoire ; acceptance = profiler une page/script réel du pilote,
-de la collecte au rapport UI + CI.
+- `scripts/php/phperf-profile.php` — wrapper CLI générique : vérif
+  ext-xhprof (message pecl), flags CPU+MEMORY par défaut et **builtins
+  conservés** (les règles ciblent `array_merge`, `hash`, `usleep`…),
+  passage d'args après `--`, profil partiel écrit même si le scénario
+  lève (exit 1), normalisation du dump (entiers, champs garantis,
+  racine `main()` synthétisée si absente) ;
+- `scripts/php/phperf-prepend.php` / `phperf-append.php` — profilage HTTP
+  sans toucher au code : déclenché uniquement si `PHPERF_PROFILE=1`
+  (requêtes ordinaires gratuites), dump horodaté dans `PHPERF_OUTPUT_DIR`,
+  l'amorce inclut elle-même l'append (auto_prepend_file seul suffit) ;
+- `scripts/fixtures/php-demo/` + image `Dockerfile.demo` + cible
+  `make demo-collect` — essai bout-en-bout sans framework ;
+- compose `web` paramétrable (`PHPERF_PROFILE=bin/phperf-demo.json make up`) ;
+- `docs/utilisation.md` étape 1 réécrite (installation ext-xhprof, scénario
+  CLI, mode HTTP, exemple GitHub Actions réel).
 
-### Jalon 8 — Dédoublonnage des findings (`supersedes`)
+Vérification sur profil réel (image php:8.3-cli + xhprof) : le scénario de
+démo produit un profil de 10 entrées qui déclenche **7 règles distinctes**
+(12 findings) — dont n-plus-one-query (`Doctrine\DBAL\FakeConnection::query`,
+ct=50), duplicated-calculation ×5, dominant-subtree ×2, blocking-sleep,
+array-merge-in-loop, slow-single-query, cpu-bound-function ; chaîne
+baseline → run → exit 0 verte.
+
+Formalisation en test E2E automatisé :
+
+- `scripts/e2e.sh` + cible `make e2e` (côté hôte, **hors gates**) :
+  image php+xhprof → collecte wrapper → assertions du contrat JSON
+  (racine main(), champs entiers garantis, N+1 ct=50) → chaîne CI
+  (baseline/run exit 0, refus sans baseline) → boot UI + findings rendus.
+- Pièges rencontrés : binaires liés à la glibc du conteneur toolchain →
+  la chaîne CI tourne aussi en conteneur ; chemins absolus après `cd`
+  dans les sous-shells ; `bin/` appartient au conteneur (root) → espace
+  de travail E2E à la racine (`.e2e-*`, nettoyé par trap).
+- Le dépôt gagne sa propre CI GitHub Actions (`.github/workflows/ci.yml`) :
+  job `check` (`make check`) + job `e2e` (`make e2e`) sur chaque PR/push.
+
+### Jalon 8 — Package Composer `phperf/profile`
+
+Objectif UX : `composer require phperf/profile` puis une commande unique,
+zéro fichier à écrire chez l'utilisateur.
+
+- Autoload `files` : activation très précoce (dès vendor/autoload.php) si
+  `PHPERF_PROFILE=1` — supprime la config serveur auto_prepend_file ;
+- Binaire `vendor/bin/phperf <cmd…>` : boote le kernel détecté (adaptateurs
+  Symfony Bundle / Laravel Provider auto-découverts) et profile la charge —
+  remplace le fichier scénario ;
+- Vérification proactive d'ext-xhprof avec instructions ;
+- Implémentation interne = les primitives du jalon 7 (mêmes garanties JSON).
+
+### Jalon 9 — Dédoublonnage des findings (`supersedes`)
 
 Constat (remonté par le pilote sur l'UI) : plusieurs règles peuvent tomber
 sur **le même callee** en décrivant le même problème — ex. une requête SQL
@@ -385,7 +426,7 @@ Décision de principe (jugement assistant, à valider au moment du jalon) :
   `exclude_pattern` uniquement (fonctionne pour la paire SQL, pas pour les
   autres recouvrements, et enterre la connaissance au lieu de la déclarer).
 
-### Jalon 9 — Packs de règles multi-fichiers
+### Jalon 10 — Packs de règles multi-fichiers
 
 `--rules proto/rules.d/*.yaml` (ou répertoire) : cœur générique + packs par
 framework (Symfony, Laravel, WordPress…) maintenus séparément. Conditionne
@@ -401,15 +442,8 @@ s'étend (fusion stricte, ids globalement uniques).
 - Export masques → baseline (partager le triage local avec l'équipe).
 - Suggestions de correctifs assistées (LLM) sur les findings sans reco.
 - Rapport HTML autonome exportable (pièce jointe de CI).
-
----
-
-## Questions ouvertes (TODO(phperf))
-
-1. Modalités de collecte réelle (jalon 7) : script autonome vs
-   instrumentation applicative — la proposition détaillée ci-dessus
-   recommande de démarrer par le script autonome, le format JSON restant
-   le contrat stable entre les deux modalités.
+- Sous-commande Go `phperf collect` (orchestration wrapper + validation
+  JSON) — pertinente une fois le package Composer en place.
 
 ## Leçons & conventions acquises en cours de route
 
