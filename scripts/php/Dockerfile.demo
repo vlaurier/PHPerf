@@ -1,6 +1,9 @@
-# Image d'essai PHPerf : PHP CLI avec ext-xhprof préinstallé.
+# Image d'essai PHPerf : PHP CLI avec ext-xhprof et Composer préinstallés.
 # Usage (via make demo-collect) :
 #   docker build -t phperf-demo-php -f scripts/php/Dockerfile.demo scripts/php
 FROM php:8.3-cli
 
 RUN pecl install xhprof && docker-php-ext-enable xhprof
+
+# Composer pour valider le package phperf/profile en fin de test E2E.
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer

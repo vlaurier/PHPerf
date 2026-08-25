@@ -44,8 +44,13 @@ make release  # cross-compile archives pour GitHub Releases
 make up       # interface web de démonstration sur http://localhost:8080
 ```
 
-Guide d'usage complet sur une vraie application :
-[`docs/utilisation.md`](docs/utilisation.md).
+**Option 3 — Collecte PHP** (si vous voulez profiler votre app sans toucher
+à votre code) :
+```bash
+composer require --dev phperf/profile
+# Puis PHPERF_PROFILE=1 devant la commande/requete à profiler.
+```
+Voir [`docs/utilisation.md`](docs/utilisation.md) pour les détails.
 
 ## Utilisation visée
 

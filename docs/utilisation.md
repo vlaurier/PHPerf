@@ -86,9 +86,8 @@ curl -s http://localhost:8080/rapports > /dev/null
 # → log "[phperf] profil écrit : /tmp/phperf-20260824-141233-a1b2c3.json"
 ```
 
-> À venir : un futur package Composer placera ces fichiers dans
-> `vendor/phperf/profile/…` et rendra même la ligne `auto_prepend_file`
-> facultative (activation dès l'autoloader).
+> À venir : des adaptateurs Symfony/Laravel dédiés pour une activation
+> encore plus transparente (découverte automatique du framework).
 
 ### (c) Variante : tâches sans page web (cron, import, commande)
 
@@ -238,6 +237,7 @@ bin/phperf-ci run --profile=… --rules=… --scoring=scoring.yaml
    assumé.
 4. Laisser la **CI** garantir qu'aucun nouveau goulot n'entre sans revue.
 
-> À venir : un package Composer `phperf/profile` absorbant la
+> Les adaptateurs Symfony/Laravel (kernel boot automatique) restent à
+> venir ; le package fonctionne avec tous les frameworks utilisant Composer.
 > configuration serveur et le fichier scénario pour les frameworks supportés
 > (Symfony, Laravel…) — `composer require` puis une commande unique.

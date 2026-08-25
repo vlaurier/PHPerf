@@ -96,4 +96,36 @@ case $body in
 esac
 printf "UI ok sur http://localhost:%s (findings attendus présents)\n" "$PORT"
 
+step "6/6 Package Composer : autoload-activated profiling"
+docker run --rm -v "$ROOT":/src -w /src "$IMAGE" sh -ec '
+set -e
+APPDIR=/tmp/phperf-app
+rm -rf "$APPDIR" && mkdir -p "$APPDIR/app"
+cat > "$APPDIR/composer.json" <<EOF
+{
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "repositories": [
+        { "type": "path", "url": "/src/php" }
+    ],
+    "require": {
+        "phperf/profile": "*"
+    }
+}
+EOF
+cat > "$APPDIR/app/index.php" <<'"'"'PHPEOF'"'"'
+<?php
+require __DIR__."../../vendor/autoload.php";
+for ($i=0; $i<20; $i++) { array_merge(range(0,$i), range(0,$i)); }
+PHPEOF
+cd "$APPDIR"
+composer install --no-interaction 2>&1 || { cat composer.json; echo "---" ; exit 1; }
+PHPERF_PROFILE=1 PHPERF_OUTPUT_DIR="$APPDIR" php app/index.php 2>&1 || { echo "php failed" >&2; exit 1; }
+PROFILE=$(ls "$APPDIR"/phperf-*.json 2>/dev/null | head -1)
+[ -n "$PROFILE" ] && [ -s "$PROFILE" ] || { ls "$APPDIR"; echo "JSON absent" >&2; exit 1; }
+php -r "\$p=json_decode(file_get_contents(\"$PROFILE\"),true); if(!isset(\$p[\"main()\"])) exit(1);" \
+    || { echo "main() absente" >&2; exit 1; }
+printf "Package Composer validé : profil %s octets\n" "$(wc -c < "$PROFILE")"
+' 2>&1 || fail "package Composer phperf/profile"
+
 printf '\nE2E PASS — chaîne complète validée.\n'

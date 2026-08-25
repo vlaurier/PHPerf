@@ -21,9 +21,10 @@
 | 5 | Rapports & UI web (`report`, `ui`, `storage`, service `web`) | ✅ Fait |
 | 6 | Expressivité moteur + catalogue de règles (20 règles testées) | ✅ Fait |
 | 7 | Collecte PHP réelle (pont XHProf → JSON) | ✅ Fait |
-| 8 | Distribution des binaires (release multi-OS) | ⬜ À faire |
+| 8 | Distribution des binaires (release multi-OS) | ✅ Fait |
+| 9 | Package Composer `phperf/profile` (collecte) | ✅ Fait |
 
-Qualité : `make check` vert sur les jalons 0-8 ; couverture **100 %**
+Qualité : `make check` vert sur les jalons 0-9 ; couverture **100 %**
 constatée sur les cinq packages métier (`collector`, `analyzer`, `rules`,
 `scorer`, `baseline`) ; packages d'infrastructure entre 91 et 98 %
 (`report`, `storage`, `ui` — branches restantes : erreurs driver/scan
@@ -401,15 +402,21 @@ et exécution directe — aucune étape supplémentaire.
 
 ---
 
-### Jalon 9 — Package Composer `phperf/profile`
+### Jalon 9 — Package Composer `phperf/profile` — FAIT
 
-Objectif UX : `composer require phperf/profile` puis une commande unique,
-zéro fichier à écrire chez l'utilisateur.
+`composer require --dev phperf/profile` → collecte sans aucune modification
+de code : l'amorce s'active automatiquement via l'autoload de Composer.
 
-- Autoload `files` : activation très précoce (dès vendor/autoload.php) si
-  `PHPERF_PROFILE=1` — supprime la config serveur auto_prepend_file ;
-- Vérification proactive d'ext-xhprof avec instructions ;
-- Implémentation interne = les primitives du jalon 7 (mêmes garanties JSON).
+Livrables :
+
+- `php/composer.json` (package `phperf/profile`) + `php/src/autoload.php` :
+  activation si `PHPERF_PROFILE=1`, flags configurables via `PHPERF_FLAGS`,
+  dumps horodatés dans `PHPERF_OUTPUT_DIR` (défaut : tmp), normalisation
+  complète du dump (mêmes garanties que `phperf-profile.php`).
+- `php/` sous-répertoire autonome du dépôt principal ; publication
+  Packagist prévue en tant que source externe.
+- E2E étendu (étape 6) : mini-app PHP testant le flux complet
+  `composer install → require autoload → profil automatique → JSON valide`.
 
 ### Jalon 10 — Dédoublonnage des findings (`supersedes`)
 
