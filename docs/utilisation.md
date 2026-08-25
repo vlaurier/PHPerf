@@ -13,7 +13,7 @@
 PHPerf n'est **pas** (encore) une dépendance Composer de votre application :
 c'est un outil externe qui lit un profil XHProf exporté en JSON. Votre code
 métier reste intouché — seuls deux fichiers de colle légers interviennent
-(scénario CLI ou config serveur HTTP).
+(config serveur HTTP pour les pages, ou scénario CLI pour les tâches).
 
 ## Étape 1 — Obtenir un profil
 
@@ -34,10 +34,52 @@ Sous Docker : `RUN pecl install xhprof && docker-php-ext-enable xhprof`.
 L'extension ne coûte rien tant qu'elle n'est pas activée ; activez-la
 uniquement sur les environnements où vous profilez (dev, CI…).
 
-### (b) Tâche CLI : le fichier scénario
+### (b) Pages web : deux lignes de config, puis naviguez
 
-Créez `phperf-scenario.php` **à la racine de votre projet** — il boote
-l'application et lance la charge à profiler :
+Récupérez les deux scripts de collecte et copiez-les où vous voulez dans
+votre projet (par exemple `tools/phperf/`) — ce sont des fichiers autonomes,
+sans dépendance. Déclarez ensuite l'amorce dans la config PHP du serveur
+(php.ini, pool FPM, `.htaccess` selon votre montage) :
+
+```ini
+auto_prepend_file = /chemin/vers/tools/phperf/phperf-prepend.php
+```
+
+C'est tout : l'amorce inclut elle-même le script de fin de chaîne et aucune
+ligne de votre application n'est modifiée. Deux variables d'environnement
+pilotent ensuite le comportement — à définir là où votre runtime PHP lit
+les siennes : pool FPM (`env[VARIABLE] = valeur`), section `environment:`
+d'un service Docker, `SetEnv` Apache, `export` en shell…
+
+| Variable | Rôle |
+|---|---|
+| `PHPERF_PROFILE=1` | active la collecte pour les requêtes qui la voient |
+| `PHPERF_OUTPUT_DIR=/var/profils` | répertoire des dumps (défaut : tmp système) |
+
+Sans `PHPERF_PROFILE`, l'amorce se termine immédiatement sans rien mesurer :
+vos requêtes ordinaires gardent exactement leurs performances habituelles.
+Quand la variable est posée, **allez simplement sur la page dans votre
+navigateur** : à la fin du chargement, un JSON horodaté est écrit et
+signalé dans les logs.
+
+```text
+navigateur ──▶ requête HTTP ──▶ [amorce xhprof] ──▶ $PHPERF_OUTPUT_DIR/phperf-….json
+```
+
+```bash
+export PHPERF_PROFILE=1    # ou équivalent selon votre montage
+curl -s http://localhost:8080/rapports > /dev/null
+# → log "[phperf] profil écrit : /tmp/phperf-20260824-141233-a1b2c3.json"
+```
+
+> À venir : un futur package Composer placera ces fichiers dans
+> `vendor/phperf/profile/…` et rendra même la ligne `auto_prepend_file`
+> facultative (activation dès l'autoloader).
+
+### (c) Variante : tâches sans page web (cron, import, commande)
+
+Pour profiler une charge déclenchée en CLI, créez `phperf-scenario.php`
+à la racine de votre projet — il boote l'application et lance la charge :
 
 ```php
 <?php
@@ -56,31 +98,11 @@ php /chemin/phperf-profile.php --output=profil.json phperf-scenario.php
 
 Options utiles : `--no-cpu`, `--no-memory`, `--no-builtins` (déconseillé :
 plusieurs règles ciblent des fonctions natives). Un scénario qui plante
-produit quand même un profil partiel (exit code 1). Essayez sans rien
-installer avec la démo fournie :
+produit quand même un profil partiel (exit code 1). Essayez le mécanisme
+sans rien installer avec la démo fournie :
 
 ```bash
 make demo-collect   # → bin/phperf-demo.json via une image php+xhprof éphémère
-```
-
-### (c) Pages HTTP : zéro modification de code
-
-Déclarez l'amorce dans la config PHP du serveur (php.ini, pool FPM,
-`.htaccess` selon votre montage) :
-
-```ini
-auto_prepend_file = /chemin/phperf-prepend.php
-```
-
-C'est tout : l'amorce inclut elle-même la fin de chaîne. Le profilage ne
-s'active que si la variable d'environnement `PHPERF_PROFILE=1` est posée
-(sur une requête, un pod, un conteneur…) — les requêtes ordinaires ne paient
-rien. Chaque requête profile écrit un JSON horodaté dans
-`PHPERF_OUTPUT_DIR` (défaut : tmp système) et le signale dans les logs :
-
-```bash
-PHPERF_PROFILE=1 curl -s http://localhost:8080/rapports > /dev/null
-# → log "[phperf] profil écrit : /tmp/phperf-20260824-141233-a1b2c3.json"
 ```
 
 ### (d) Consommer le profil
@@ -195,12 +217,13 @@ bin/phperf-ci run --profile=… --rules=… --scoring=scoring.yaml
 
 ## Workflow recommandé (résumé)
 
-1. **Profiler** l'app — scénario CLI ou variable d'env HTTP (étape 1).
+1. **Profiler** l'app — pages web (variable d'env + navigateur) ou tâches
+   CLI via scénario (étape 1).
 2. **Explorer** les findings priorisés dans l'UI, masquer le bruit local.
 3. Corriger les priorités hautes ; **régénérer la baseline** quand c'est
    assumé.
 4. Laisser la **CI** garantir qu'aucun nouveau goulot n'entre sans revue.
 
-> À venir (jalon 8) : un package Composer `phperf/profile` absorbant la
+> À venir : un package Composer `phperf/profile` absorbant la
 > configuration serveur et le fichier scénario pour les frameworks supportés
 > (Symfony, Laravel…) — `composer require` puis une commande unique.
