@@ -1,8 +1,9 @@
 COMPOSE := docker compose
 DC_RUN  := $(COMPOSE) run --rm app
+VERSION := $(shell git describe --tags --always 2>/dev/null || echo dev)
 
 .DEFAULT_GOAL := help
-.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer tests-baseline tests-storage tests-report tests-ui ci-demo demo-collect e2e check build shell up down logs clean
+.PHONY: help fix lint vet tidy tests tests-collector tests-analyzer tests-rules tests-scorer tests-baseline tests-storage tests-report tests-ui ci-demo demo-collect e2e release check build shell up down logs clean
 
 help: ## Affiche cette aide
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -68,8 +69,14 @@ e2e: ## Test E2E collecte→CI→UI (côté hôte, requiert Docker + réseau ; ~
 check: ## Tout vérifier d'un coup : lint + vet + tests
 	$(DC_RUN) bash -ec 'golangci-lint fmt --diff && golangci-lint run && go vet ./... && go test -race -cover ./...'
 
-build: ## Compile bin/phperf et bin/phperf-ci
-	$(DC_RUN) bash -ec 'go build -buildvcs=false -o bin/phperf ./cmd/phperf && go build -buildvcs=false -o bin/phperf-ci ./cmd/phperf-ci'
+build: ## Compile bin/phperf et bin/phperf-ci (statiques, version estampée : $(VERSION))
+	$(DC_RUN) bash -ec 'CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+		-ldflags "-X main.version=$(VERSION)" -o bin/phperf ./cmd/phperf && \
+	CGO_ENABLED=0 go build -trimpath -buildvcs=false \
+		-ldflags "-X main.version=$(VERSION)" -o bin/phperf-ci ./cmd/phperf-ci'
+
+release: ## Construit les archives multi-plateformes dans dist/ (pour GitHub Releases)
+	$(DC_RUN) sh scripts/release.sh "$(VERSION)" dist
 
 shell: ## Shell interactif dans le conteneur dev (go, golangci-lint…)
 	$(DC_RUN) bash

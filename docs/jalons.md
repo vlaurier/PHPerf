@@ -20,9 +20,10 @@
 | 4 | Baseline CI (`baseline`, `phperf-ci`) — storage déplacé au 5 | ✅ Fait |
 | 5 | Rapports & UI web (`report`, `ui`, `storage`, service `web`) | ✅ Fait |
 | 6 | Expressivité moteur + catalogue de règles (20 règles testées) | ✅ Fait |
-| 7 | Collecte PHP réelle (pont XHProf → JSON) | ⬜ À faire |
+| 7 | Collecte PHP réelle (pont XHProf → JSON) | ✅ Fait |
+| 8 | Distribution des binaires (release multi-OS) | ⬜ À faire |
 
-Qualité : `make check` vert sur les jalons 0-7 ; couverture **100 %**
+Qualité : `make check` vert sur les jalons 0-8 ; couverture **100 %**
 constatée sur les cinq packages métier (`collector`, `analyzer`, `rules`,
 `scorer`, `baseline`) ; packages d'infrastructure entre 91 et 98 %
 (`report`, `storage`, `ui` — branches restantes : erreurs driver/scan
@@ -332,14 +333,14 @@ sur les 7 fixtures.
 Décisions (24/08/2026) :
 
 - **Séquence en deux jalons** : primitives PHP autonomes d'abord
-  (fonctionnelles immédiatement), **package Composer ensuite** (jalon 8)
+  (fonctionnelles immédiatement), **package Composer ensuite** (jalon 9)
   qui les emballera avec des adaptateurs framework — l'expérience
   zéro-code est repoussée à ce second jalon, pas abandonnée.
 - **Pas de sous-commande Go `phperf collect`** pour l'instant : le wrapper
   PHP affiche ses propres erreurs ; l'orchestration Go attendra qu'il y ait
   une commande unique à orchestrer (après le package Composer).
 - **CLI + HTTP dès ce jalon** ; la paire prepend/append reste documentée
-  comme repli pour legacy sans Composer même après le jalon 8.
+  comme repli pour legacy sans Composer même après le jalon 9.
 
 Livrables :
 
@@ -379,54 +380,56 @@ Formalisation en test E2E automatisé :
 - Le dépôt gagne sa propre CI GitHub Actions (`.github/workflows/ci.yml`) :
   job `check` (`make check`) + job `e2e` (`make e2e`) sur chaque PR/push.
 
-### Jalon 8 — Package Composer `phperf/profile`
+### Jalon 8 — Distribution des binaires — FAIT
+
+Objectif : télécharger et exécuter PHPerf sans cloner le dépôt ni avoir
+Go d'installé — binaires statiques publics sur GitHub Releases.
+
+Livrables :
+
+- `cmd/phperf/main.go` + `cmd/phperf-ci/commands.go` : flag `--version`
+  (cobra pour phperf-ci, `flag` pour phperf) ;
+- `make build` : binaires **statiques** (`CGO_ENABLED=0`) avec version
+  estampée via `-ldflags "-X main.version=…"` ;
+- `scripts/release.sh` : cross-compilation (linux/darwin/windows ×
+  amd64/arm64) → archives tar.gz + `SHA256SUMS` dans `dist/` ;
+- `.github/workflows/release.yml` : à chaque tag `v*`, `make release` puis
+  publication automatique sur GitHub Releases.
+
+L'archive contient les deux binaires (`phperf` + `phperf-ci`) ; extraction
+et exécution directe — aucune étape supplémentaire.
+
+---
+
+### Jalon 9 — Package Composer `phperf/profile`
 
 Objectif UX : `composer require phperf/profile` puis une commande unique,
 zéro fichier à écrire chez l'utilisateur.
 
 - Autoload `files` : activation très précoce (dès vendor/autoload.php) si
   `PHPERF_PROFILE=1` — supprime la config serveur auto_prepend_file ;
-- Binaire `vendor/bin/phperf <cmd…>` : boote le kernel détecté (adaptateurs
-  Symfony Bundle / Laravel Provider auto-découverts) et profile la charge —
-  remplace le fichier scénario ;
 - Vérification proactive d'ext-xhprof avec instructions ;
 - Implémentation interne = les primitives du jalon 7 (mêmes garanties JSON).
 
-### Jalon 9 — Dédoublonnage des findings (`supersedes`)
+### Jalon 10 — Dédoublonnage des findings (`supersedes`)
 
-Constat (remonté par le pilote sur l'UI) : plusieurs règles peuvent tomber
-sur **le même callee** en décrivant le même problème — ex. une requête SQL
-dans une boucle déclenche à la fois `n-plus-one-query` (batcher) et
-`duplicated-calculation` (mémoïser) ; traiter le premier rend le second
-sans objet.
+Plusieurs règles peuvent tomber sur **le même callee** en décrivant le
+même problème — ex. une requête SQL dans une boucle déclenche à la fois
+`n-plus-one-query` (batcher) et `duplicated-calculation` (mémoïser) ;
+traiter le premier rend le second sans objet.
 
-Décision de principe (jugement assistant, à valider au moment du jalon) :
-
-- **D'abord l'option sémantique « supersedes »**, pas le simple
-  regroupement visuel :
+- **Option retenue : « supersedes » déclaratif** (pas simple regroupement
+  visuel) ;
   - champ `supersedes: [id...]` dans le format de règle : la règle la plus
     spécifique déclare celles qu'elle remplace ;
   - moteur : quand règle R et une règle remplacée S tombent sur le **même
     callee**, le finding de S est retiré (résolution transitive) ;
-  - loader : ids référencés doivent exister dans le jeu chargé (erreur
-    stricte sinon) ;
-  - baseline : une clé retirée disparaît proprement (amélioration) et
-    réapparaîtrait comme « nouveau » en cas de régression — signal correct
-    dans les deux sens ;
   - câblage catalogue : `n-plus-one-query` et `slow-single-query`
-    remplacent `duplicated-calculation` sur les callees SQL (seuils
-    identiques ⇒ quand l'un sonne, l'autre a déjà sonné).
-- **Pourquoi pas seulement le regroupement UI (option C)** : il ne change
-  rien aux sorties CI (comptes, exit codes, rapport texte) où le bruit
-  compte autant ; il reste utile ensuite mais mérite d'être guidé par un
-  vrai retour d'usage (que veut voir côte à côte un développeur ?). Les
-  paires *complémentaires* restent volontairement affichées ensemble
+    remplacent `duplicated-calculation` sur les callees SQL.
+- Les paires *complémentaires* restent affichées ensemble
   (ex. `n-plus-one-query` + `dominant-subtree`) : remèdes différents.
-- Alternative rejetée faute de généralité : discipline de catalogue par
-  `exclude_pattern` uniquement (fonctionne pour la paire SQL, pas pour les
-  autres recouvrements, et enterre la connaissance au lieu de la déclarer).
 
-### Jalon 10 — Packs de règles multi-fichiers
+### Jalon 11 — Packs de règles multi-fichiers
 
 `--rules proto/rules.d/*.yaml` (ou répertoire) : cœur générique + packs par
 framework (Symfony, Laravel, WordPress…) maintenus séparément. Conditionne

@@ -28,20 +28,21 @@ jalon (7) — voir [`docs/jalons.md`](docs/jalons.md).
 
 ## Démarrage rapide
 
-Prérequis : **Docker uniquement.** La toolchain Go (1.27), golangci-lint et
-goimports sont fournis par l'image du `Dockerfile` — version maîtrisée, rien
-à installer sur l'hôte.
+**Option 1 — Binaires (recommandé)** : télécharger depuis
+[GitHub Releases](https://github.com/phperf/phperf/releases), extraire et
+lancer. Aucun prérequis.
+
+**Option 2 — Depuis la source** : Go 1.21+ requis, ou Docker uniquement
+(la toolchain Go, golangci-lint et goimports sont fournis par l'image du
+`Dockerfile` — version maîtrisée, rien à installer sur l'hôte).
 
 ```bash
 make check    # lint + vet + tests — doit passer avant commit
-make build    # compile bin/phperf et bin/phperf-ci dans le conteneur
+make build    # compile bin/phperf et bin/phperf-ci (statiques)
 make e2e      # test E2E collecte PHP réelle (côté hôte, ~2 min à froid)
+make release  # cross-compile archives pour GitHub Releases
 make up       # interface web de démonstration sur http://localhost:8080
 ```
-
-Toutes les cibles (`make help`) lancent les outils **dans le conteneur** :
-`fix`, `lint`, `vet`, `tests`, `check`, `build`, `shell`, `up`, `down`…
-La CI du dépôt exécute `make check` et `make e2e` sur chaque PR.
 
 Guide d'usage complet sur une vraie application :
 [`docs/utilisation.md`](docs/utilisation.md).
@@ -74,8 +75,8 @@ considérés comme connus et ignorés jusqu'à correction ou régénération.
 ### Interface web
 
 ```bash
-bin/phperf --profile=profil.json --rules=proto/rules.example.yaml \
-           [--scoring=poids.yaml] [--db=.phperf.db] [--addr=:8080]
+phperf --profile=profil.json --rules=proto/rules.example.yaml \
+       [--scoring=poids.yaml] [--db=.phperf.db] [--addr=:8080]
 # Explorer les findings priorisés, gérer le triage (masquage persistant
 # SQLite) dans le navigateur.
 ```

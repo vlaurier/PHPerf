@@ -21,6 +21,10 @@ import (
 	"github.com/phperf/phperf/internal/ui"
 )
 
+// version — tampon d'identification du binaire, écrasé à la compilation
+// par `-ldflags "-X main.version=…"` (make build / scripts/release.sh).
+var version = "dev"
+
 func main() {
 	if err := run(); err != nil {
 		log.Fatal(err)
@@ -36,8 +40,13 @@ func run() error {
 		scoringPath = flag.String("scoring", "", "pondérations YAML optionnelles (défauts embarqués sinon)")
 		dbPath      = flag.String("db", ".phperf.db", "base SQLite des décisions de triage")
 		addr        = flag.String("addr", ":8080", "adresse d'écoute HTTP")
+		showVersion = flag.Bool("version", false, "affiche la version puis sort")
 	)
 	flag.Parse()
+	if *showVersion {
+		fmt.Println(version)
+		return nil
+	}
 	if *profilePath == "" || *rulesPath == "" {
 		return fmt.Errorf("flags requis : --profile et --rules")
 	}

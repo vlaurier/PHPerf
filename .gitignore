@@ -21,3 +21,6 @@
 
 # Artefacts du test E2E (nettoyés par le script, résidus éventuels)
 /.e2e-*/
+
+# Archives de release (make release)
+/dist/

@@ -5,15 +5,29 @@
 
 ## Prérequis
 
-| Composant | Rôle | Notes |
-|---|---|---|
-| Docker | Exécuter PHPerf et sa toolchain | Seul prérequis côté hôte |
-| PHP 8.x + extension `xhprof` | Produire le profil | Côté application profilée — installation ci-dessous |
+- **ext-xhprof** sur le PHP qui exécute votre application — seule
+  dépendance nécessaire, installation en 1 ligne (ci-dessous).
 
-PHPerf n'est **pas** (encore) une dépendance Composer de votre application :
-c'est un outil externe qui lit un profil XHProf exporté en JSON. Votre code
-métier reste intouché — seuls deux fichiers de colle légers interviennent
-(config serveur HTTP pour les pages, ou scénario CLI pour les tâches).
+## Installer l'outil
+
+Téléchargez la dernière release pour votre OS sur
+[GitHub Releases](https://github.com/phperf/phperf/releases) :
+deux binaires statiques (phperf + phperf-ci), aucune dépendance, extraction
+et exécution directe.
+
+Alternativement, depuis la source (Go 1.21+ requis, ou Docker) :
+
+```bash
+go install github.com/phperf/phperf/cmd/phperf@latest
+go install github.com/phperf/phperf/cmd/phperf-ci@latest
+```
+
+Vérification :
+
+```bash
+phperf --version
+phperf-ci --version
+```
 
 ## Étape 1 — Obtenir un profil
 

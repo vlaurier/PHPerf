@@ -13,6 +13,10 @@ import (
 
 const defaultBaselinePath = ".phperf-baseline.json"
 
+// version — tampon d'identification du binaire, écrasé à la compilation
+// par `-ldflags "-X main.version=…"` (make build / scripts/release.sh).
+var version = "dev"
+
 // codedError — erreur portant un code de sortie explicite (cf. exit codes
 // documentés dans AGENTS.md).
 type codedError struct {
@@ -38,6 +42,7 @@ func Execute() error {
 	root := &cobra.Command{
 		Use:           "phperf-ci",
 		Short:         "PHPerf pour la CI : échoue uniquement sur les findings nouveaux",
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
