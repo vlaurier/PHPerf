@@ -24,3 +24,6 @@
 
 # Archives de release (make release)
 /dist/
+
+# Composer (le composer.lock d'une librairie ne se versionne pas)
+/composer.lock

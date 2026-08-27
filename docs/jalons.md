@@ -22,7 +22,8 @@
 | 6 | Expressivité moteur + catalogue de règles (20 règles testées) | ✅ Fait |
 | 7 | Collecte PHP réelle (pont XHProf → JSON) | ✅ Fait |
 | 8 | Distribution des binaires (release multi-OS) | ✅ Fait |
-| 9 | Package Composer `phperf/profile` (collecte) | ✅ Fait |
+| 9 | Package Composer `ph-perf/profile` (collecte) | ✅ Fait |
+| 9bis | Distribution Composer depuis le monorepo (`.gitattributes`) | ✅ Fait |
 | 10 | Dédoublonnage des findings (`supersedes`) | ✅ Fait |
 
 Qualité : `make check` vert sur les jalons 0-10 ; couverture **100 %**
@@ -403,21 +404,52 @@ et exécution directe — aucune étape supplémentaire.
 
 ---
 
-### Jalon 9 — Package Composer `phperf/profile` — FAIT
+### Jalon 9 — Package Composer `ph-perf/profile` — FAIT
 
-`composer require --dev phperf/profile` → collecte sans aucune modification
+`composer require --dev ph-perf/profile` → collecte sans aucune modification
 de code : l'amorce s'active automatiquement via l'autoload de Composer.
 
 Livrables :
 
-- `php/composer.json` (package `phperf/profile`) + `php/src/autoload.php` :
-  activation si `PHPERF_PROFILE=1`, flags configurables via `PHPERF_FLAGS`,
-  dumps horodatés dans `PHPERF_OUTPUT_DIR` (défaut : tmp), normalisation
-  complète du dump (mêmes garanties que `phperf-profile.php`).
-- `php/` sous-répertoire autonome du dépôt principal ; publication
-  Packagist prévue en tant que source externe.
+- `php/src/autoload.php` : activation si `PHPERF_PROFILE=1`, flags
+  configurables via `PHPERF_FLAGS`, dumps horodatés dans
+  `PHPERF_OUTPUT_DIR` (défaut : tmp), normalisation complète du dump
+  (mêmes garanties que `phperf-profile.php`).
 - E2E étendu (étape 6) : mini-app PHP testant le flux complet
   `composer install → require autoload → profil automatique → JSON valide`.
+
+> La **distribution** du package (nom/emplacement du `composer.json`,
+> contenu de l'archive Packagist) fait l'objet du jalon 9bis ci-dessous —
+> le package est publié depuis la racine du monorepo, pas depuis `php/`.
+
+### Jalon 9bis — Package Composer distribué depuis le monorepo — FAIT
+
+Décision : **un seul dépôt**, pas de repo Composer dédié à synchroniser.
+
+La commande `composer require ph-perf/profile` doit fonctionner une fois le
+package publié sur Packagist ; sans duplication du code de collecte.
+
+- `composer.json` **à la racine** du monorepo (nom `ph-perf/profile`, autoload
+  `files` → `php/src/autoload.php`) : Packagist lit un dépôt, or les tags
+  versionnent déjà le code Go — aucune copie à maintenir. Le vendor
+  `ph-perf` (et non `phperf`) est retenu car le namespace `phperf` est déjà
+  revendiqué sur Packagist par un tiers ;
+- `.gitattributes` avec `export-ignore` : seuls les fichiers utiles au
+  package entrent dans l'archive Packagist (`composer.json`, `LICENSE`,
+  `README.md`, `php/`) — le `git clone` du dépôt garde, lui, la totalité ;
+- `php/composer.json` supprimé (source unique de vérité : la racine) ;
+- e2e (étape 6) pointé sur la racine (`type: path`, `url: /src`) ;
+- `LICENSE` (MIT) ajouté, avec placeholder d'auteur à ajuster avant
+  publication.
+
+À faire au moment de la vraie publication :
+
+1. Ajuster l'auteur du `LICENSE` ;
+2. Compte Packagist → Submit Package → URL du dépôt GitHub ;
+3. Hook GitHub (Packagist → Settings) pour l'auto-update à chaque tag ;
+4. `git tag v0.9.0 && git push origin v0.9.0` — et vérifier sur
+   `https://packagist.org/packages/ph-perf/profile` que l'archive téléchargée
+   ne contient que l'essentiel (télécharger le zip distribué pour contrôle).
 
 ### Jalon 10 — Dédoublonnage des findings (`supersedes`) — FAIT
 

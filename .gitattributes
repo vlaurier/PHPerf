@@ -1,0 +1,40 @@
+# Distribution du package Composer (phperf/profile) : le monorepo entier ne
+# doit pas être embarqué dans l'archive publiée sur Packagist. Tout ce qui
+# n'est pas nécessaire au package PHP est export-ignored ; le git clone du
+# dépôt, lui, garde la totalité des sources.
+
+# Code & binaires Go
+*.go export-ignore
+
+# Racine Go / outils de dev
+/go.mod export-ignore
+/go.sum export-ignore
+/Makefile export-ignore
+/Dockerfile export-ignore
+/docker-compose.yml export-ignore
+/bin export-ignore
+/dist export-ignore
+/AGENTS.md export-ignore
+
+# Code métier, docs, fixtures, CI — non nécessaires à la collecte
+/cmd export-ignore
+/internal export-ignore
+/proto export-ignore
+/docs export-ignore
+/scripts export-ignore
+/.github export-ignore
+/.idea export-ignore
+/.opencode export-ignore
+
+# Fichiers de config & état local
+/.golangci.yml export-ignore
+/.gitignore export-ignore
+/.dockerignore export-ignore
+/.gitattributes export-ignore
+
+# Fichiers temporaires PHPerf
+/.e2e-* export-ignore
+/.phperf.db export-ignore
+/.phperf-baseline.json export-ignore
+/.phperf-demo.json export-ignore
+/composer.lock export-ignore

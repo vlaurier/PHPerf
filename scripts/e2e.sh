@@ -106,10 +106,10 @@ cat > "$APPDIR/composer.json" <<EOF
     "minimum-stability": "dev",
     "prefer-stable": true,
     "repositories": [
-        { "type": "path", "url": "/src/php" }
+        { "type": "path", "url": "/src" }
     ],
     "require": {
-        "phperf/profile": "*"
+        "ph-perf/profile": "*"
     }
 }
 EOF
@@ -126,6 +126,6 @@ PROFILE=$(ls "$APPDIR"/phperf-*.json 2>/dev/null | head -1)
 php -r "\$p=json_decode(file_get_contents(\"$PROFILE\"),true); if(!isset(\$p[\"main()\"])) exit(1);" \
     || { echo "main() absente" >&2; exit 1; }
 printf "Package Composer validé : profil %s octets\n" "$(wc -c < "$PROFILE")"
-' 2>&1 || fail "package Composer phperf/profile"
+' 2>&1 || fail "package Composer ph-perf/profile"
 
 printf '\nE2E PASS — chaîne complète validée.\n'

@@ -1,6 +1,7 @@
 {
-    "name": "phperf/profile",
+    "name": "ph-perf/profile",
     "description": "Collecte XHProf sans modification de code — active le profilage via une simple variable d'environnement.",
+    "keywords": ["php", "xhprof", "profilage", "performance", "profiling"],
     "license": "MIT",
     "type": "library",
     "minimum-stability": "stable",
@@ -9,7 +10,7 @@
         "ext-xhprof": "*"
     },
     "autoload": {
-        "files": ["src/autoload.php"]
+        "files": ["php/src/autoload.php"]
     },
     "extra": {
         "branch-alias": {
