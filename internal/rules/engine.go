@@ -20,12 +20,14 @@ type Evaluator interface {
 
 // Engine — Evaluator appliquant un jeu de règles chargé via Load.
 type Engine struct {
-	rules    []Rule
-	patterns []*regexp.Regexp // parallèle à rules ; nil si la règle n'a pas de pattern
-	excludes []*regexp.Regexp // parallèle à rules ; nil si la règle n'exclut rien
+	rules      []Rule
+	patterns   []*regexp.Regexp    // parallèle à rules ; nil si la règle n'a pas de pattern
+	excludes   []*regexp.Regexp    // parallèle à rules ; nil si la règle n'exclut rien
+	supersedes map[string][]string // id → ids supersedés (fermeture transitive)
 }
 
-// NewEngine — précompile les patterns de chaque règle (échec anticipé).
+// NewEngine — précompile les patterns de chaque règle et résout la relation
+// supersedes (références connues, absence de cycle) : échecs anticipés.
 func NewEngine(rules []Rule) (*Engine, error) {
 	patterns := make([]*regexp.Regexp, len(rules))
 	excludes := make([]*regexp.Regexp, len(rules))
@@ -48,7 +50,83 @@ func NewEngine(rules []Rule) (*Engine, error) {
 			return nil, err
 		}
 	}
-	return &Engine{rules: rules, patterns: patterns, excludes: excludes}, nil
+
+	supersedes, err := supersedeClosure(rules)
+	if err != nil {
+		return nil, err
+	}
+	return &Engine{rules: rules, patterns: patterns, excludes: excludes, supersedes: supersedes}, nil
+}
+
+// supersedeClosure — valide la relation supersedes (références connues,
+// absence de cycle) puis calcule sa fermeture transitive : pour chaque id,
+// l'ensemble des ids qu'elle remplace directement ou indirectement.
+func supersedeClosure(rules []Rule) (map[string][]string, error) {
+	index := make(map[string]int, len(rules))
+	for i := range rules {
+		index[rules[i].ID] = i
+	}
+
+	// Détection de cycle et référence inconnue (parcours en profondeur,
+	// coloré : un nœud re-rencontré sur le chemin courant = cycle).
+	const (
+		unvisited = iota
+		visiting
+		done
+	)
+	state := make([]uint8, len(rules))
+	var visit func(int) error
+	visit = func(i int) error {
+		if state[i] == done {
+			return nil
+		}
+		state[i] = visiting
+		for _, id := range rules[i].Supersedes {
+			j, known := index[id]
+			if !known {
+				return fmt.Errorf("rules : règle %q supersede la règle inconnue %q", rules[i].ID, id)
+			}
+			if state[j] == visiting {
+				return fmt.Errorf("rules : cycle supersedes impliquant la règle %q", rules[i].ID)
+			}
+			if state[j] == unvisited {
+				if err := visit(j); err != nil {
+					return err
+				}
+			}
+		}
+		state[i] = done
+		return nil
+	}
+	for i := range rules {
+		if err := visit(i); err != nil {
+			return nil, err
+		}
+	}
+
+	// Fermeture transitive — le graphe est acyclique, la collection est sûre.
+	closure := make(map[string][]string)
+	for i := range rules {
+		if len(rules[i].Supersedes) == 0 {
+			continue
+		}
+		seen := make(map[string]bool)
+		var collect func(id string)
+		collect = func(id string) {
+			if seen[id] {
+				return
+			}
+			seen[id] = true
+			closure[rules[i].ID] = append(closure[rules[i].ID], id)
+			for _, next := range rules[index[id]].Supersedes {
+				collect(next)
+			}
+		}
+		for _, id := range rules[i].Supersedes {
+			collect(id)
+		}
+	}
+	return closure, nil
 }
 
 // Evaluate — retourne les findings des règles satisfaites par le graphe.
@@ -63,6 +141,10 @@ func NewEngine(rules []Rule) (*Engine, error) {
 // Les findings sont dédupliqués par clé stable (règle|callee) : quand
 // plusieurs sites déclenchent la même règle sur le même callee, un seul
 // finding est produit et Caller retient le site dominant (plus grand CT).
+//
+// Enfin, la relation supersedes est appliquée : quand une règle R a tiré
+// sur un callee, les findings des règles qu'elle supersede (transitivement)
+// sur ce même callee sont éliminés — le remède de R rend le leur sans objet.
 func (e *Engine) Evaluate(graph *analyzer.CallGraph) ([]Finding, error) {
 	if graph == nil {
 		return nil, errors.New("rules : graphe nil")
@@ -70,7 +152,8 @@ func (e *Engine) Evaluate(graph *analyzer.CallGraph) ([]Finding, error) {
 
 	cache := newStatsCache(graph)
 	findings := make([]Finding, 0)
-	positions := make(map[string]int) // clé stable → indice dans findings
+	positions := make(map[string]int)         // clé stable → indice dans findings
+	fired := make(map[string]map[string]bool) // id de règle → callees où elle a tiré
 
 	for i := range e.rules {
 		rule := &e.rules[i]
@@ -95,6 +178,10 @@ func (e *Engine) Evaluate(graph *analyzer.CallGraph) ([]Finding, error) {
 				}
 				continue
 			}
+			if fired[rule.ID] == nil {
+				fired[rule.ID] = make(map[string]bool)
+			}
+			fired[rule.ID][callee] = true
 
 			findings = append(findings, Finding{
 				Key:             key,
@@ -114,7 +201,34 @@ func (e *Engine) Evaluate(graph *analyzer.CallGraph) ([]Finding, error) {
 			positions[key] = len(findings) - 1
 		}
 	}
-	return findings, nil
+	return applySupersedes(findings, e.supersedes, fired), nil
+}
+
+// applySupersedes — retire les findings des règles remplacées : quand une
+// règle a tiré sur un callee, les findings des règles qu'elle supersede sur
+// ce même callee sont éliminés. Le résultat final reste dans l'ordre
+// déterministe produit par Evaluate.
+func applySupersedes(findings []Finding, supersedes map[string][]string, fired map[string]map[string]bool) []Finding {
+	kill := make(map[string]map[string]bool) // callee → règles remplacées
+	for ruleID, callees := range fired {
+		for callee := range callees {
+			for _, sup := range supersedes[ruleID] {
+				if kill[callee] == nil {
+					kill[callee] = make(map[string]bool)
+				}
+				kill[callee][sup] = true
+			}
+		}
+	}
+
+	out := findings[:0]
+	for _, f := range findings {
+		if kill[f.Function][f.RuleID] {
+			continue
+		}
+		out = append(out, f)
+	}
+	return out
 }
 
 // patternMatches — vrai si la règle n'a pas de pattern ou s'il matche name.

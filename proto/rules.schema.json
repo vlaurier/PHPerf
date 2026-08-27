@@ -23,7 +23,12 @@
         "effort": { "enum": ["low", "medium", "high"] },
         "controllability": { "enum": ["controllable", "partial", "none"] },
         "match": { "$ref": "#/definitions/match" },
-        "recommendation": { "type": "string" }
+        "recommendation": { "type": "string" },
+        "supersedes": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+          "description": "Ids de regles que cette regle rend sans objet sur le meme callee (resolution transitive, cycle interdit)."
+        }
       },
       "additionalProperties": false
     },

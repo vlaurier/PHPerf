@@ -19,6 +19,12 @@
 #     observés : elles restent muettes sur ce qu'elles ne reconnaissent pas,
 #     et peuvent sonner faux sur du code renommé — c'est le rôle du
 #     masquage et de l'ajustement des scores.
+#
+# Relation supersedes : un champ `supersedes: [id, …]` déclare que la règle
+# rend sans objet les règles citées quand elles tombent sur le MÊME callee
+# (résolution transitive). La règle la plus spécifique remplace les autres ;
+# les règles complémentaires (remèdes distincts) restent affichées ensemble.
+# Un cycle entre supersedes est rejeté au chargement.
 
 rules:
   # ─── Amplification d'I/O ────────────────────────────────────────────────
@@ -30,6 +36,8 @@ rules:
     severity: critical
     effort: medium
     controllability: controllable
+    supersedes:
+      - duplicated-calculation   # batcher rend la mémoïsation sans objet
     match:
       function_pattern: "^(PDO|mysqli_|pg_|Doctrine\\\\DBAL|Illuminate\\\\Database)"
       call_count_threshold: ">=3"
@@ -45,6 +53,8 @@ rules:
     severity: critical
     effort: medium
     controllability: partial
+    supersedes:
+      - duplicated-calculation   # optimiser la requête rend la mémoïsation sans objet
     match:
       function_pattern: "^(PDO|mysqli_|pg_|Doctrine\\\\DBAL|Illuminate\\\\Database)"
       inclusive_wt_ms_threshold: ">=100"

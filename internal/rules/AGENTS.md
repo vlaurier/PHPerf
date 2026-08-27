@@ -33,6 +33,9 @@ rules:
       exclusive_wt_ms_threshold: ">=X"     # temps propre (hors enfants) en ms
       time_share_percent_threshold: ">=X"  # part du wall time total, 0–100
     recommendation: <string, conseils de fix>
+    supersedes:                            # ids de règles rendues sans objet
+      - <id>                               # sur le MÊME callee (résolution
+                                           # transitive ; cycle rejeté)
 ```
 
 Deux périmètres d'observation : **par site d'appel** (`function_pattern`,

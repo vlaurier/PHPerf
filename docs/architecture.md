@@ -61,8 +61,11 @@ Moteur déclaratif : applique des règles YAML au call graph et produit des
 `Finding`s avec recommandation de correctif. Le format est défini dans
 [`proto/`](../proto/) (exemple commenté + schéma JSON) ; une règle porte :
 `match` (pattern de fonction, contexte de boucle, seuils), `severity`,
-`effort`, `controllability`, `recommendation`. Une règle ne décide jamais
-de ce qui bloque en CI : c'est le rôle de la baseline.
+`effort`, `controllability`, `recommendation`, et éventuellement
+`supersedes` : une règle plus spécifique replace une règle citée quand les
+deux tombent sur le même callee (résolution transitive, cycle rejeté au
+chargement). Une règle ne décide jamais de ce qui bloque en CI : c'est le
+rôle de la baseline.
 
 Règles classiques du MVP : requête SQL en boucle (N+1), appel réseau en boucle,
 calcul dupliqué, récursion profonde, allocation mémoire excessive.

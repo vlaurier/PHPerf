@@ -23,8 +23,9 @@
 | 7 | Collecte PHP réelle (pont XHProf → JSON) | ✅ Fait |
 | 8 | Distribution des binaires (release multi-OS) | ✅ Fait |
 | 9 | Package Composer `phperf/profile` (collecte) | ✅ Fait |
+| 10 | Dédoublonnage des findings (`supersedes`) | ✅ Fait |
 
-Qualité : `make check` vert sur les jalons 0-9 ; couverture **100 %**
+Qualité : `make check` vert sur les jalons 0-10 ; couverture **100 %**
 constatée sur les cinq packages métier (`collector`, `analyzer`, `rules`,
 `scorer`, `baseline`) ; packages d'infrastructure entre 91 et 98 %
 (`report`, `storage`, `ui` — branches restantes : erreurs driver/scan
@@ -418,7 +419,7 @@ Livrables :
 - E2E étendu (étape 6) : mini-app PHP testant le flux complet
   `composer install → require autoload → profil automatique → JSON valide`.
 
-### Jalon 10 — Dédoublonnage des findings (`supersedes`)
+### Jalon 10 — Dédoublonnage des findings (`supersedes`) — FAIT
 
 Plusieurs règles peuvent tomber sur **le même callee** en décrivant le
 même problème — ex. une requête SQL dans une boucle déclenche à la fois
@@ -435,6 +436,9 @@ traiter le premier rend le second sans objet.
     remplacent `duplicated-calculation` sur les callees SQL.
 - Les paires *complémentaires* restent affichées ensemble
   (ex. `n-plus-one-query` + `dominant-subtree`) : remèdes différents.
+- Couverture 100 % (6 cas moteur : retrait même-callee, retrait seulement
+  sur les callees où R tire, transitivité avec diamant, complémentaires,
+  référence inconnue, cycles direct et transitif).
 
 ### Jalon 11 — Packs de règles multi-fichiers
 

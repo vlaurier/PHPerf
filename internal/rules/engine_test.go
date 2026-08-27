@@ -216,6 +216,143 @@ func TestNewEngine_InvalidExcludePattern(t *testing.T) {
 	require.ErrorContains(t, err, `"bad"`)
 }
 
+func TestNewEngine_SupersedesUnknownReference(t *testing.T) {
+	r := rule("a", rules.Match{CallCountThreshold: ptrThreshold(1)})
+	r.Supersedes = []string{"missing"}
+	e, err := rules.NewEngine([]rules.Rule{r})
+	require.Nil(t, e)
+	require.ErrorContains(t, err, `"a" supersede la règle inconnue "missing"`)
+}
+
+func TestNewEngine_SupersedesCycle(t *testing.T) {
+	a := rule("a", rules.Match{CallCountThreshold: ptrThreshold(1)})
+	a.Supersedes = []string{"b"}
+	b := rule("b", rules.Match{CallCountThreshold: ptrThreshold(1)})
+	b.Supersedes = []string{"a"}
+	e, err := rules.NewEngine([]rules.Rule{a, b})
+	require.Nil(t, e)
+	require.ErrorContains(t, err, "cycle supersedes")
+}
+
+func TestNewEngine_SupersedesSelf(t *testing.T) {
+	r := rule("a", rules.Match{CallCountThreshold: ptrThreshold(1)})
+	r.Supersedes = []string{"a"}
+	e, err := rules.NewEngine([]rules.Rule{r})
+	require.Nil(t, e)
+	require.ErrorContains(t, err, "cycle supersedes")
+}
+
+func ptrThreshold(v float64) *rules.Threshold {
+	t := rules.Threshold(v)
+	return &t
+}
+
+func TestEvaluate_SupersedesRemovesSameCalleeFinding(t *testing.T) {
+	raw := collector.RawProfile{
+		analyzer.RootName:     entry(1, 9000, 8000, 0),
+		"main()==>PDO::query": entry(5, 100, 90, 0),
+	}
+
+	specific := rule("specific", rules.Match{
+		FunctionPattern:    `^PDO`,
+		CallCountThreshold: ptrThreshold(3),
+	})
+	specific.Supersedes = []string{"generic"}
+	generic := rule("generic", rules.Match{
+		FunctionPattern:    `^PDO`,
+		CallCountThreshold: ptrThreshold(3),
+	})
+
+	findings, err := mustEngine(t, specific, generic).Evaluate(normalize(t, raw))
+	require.NoError(t, err)
+	require.Len(t, findings, 1)
+
+	assert.Equal(t, "specific", findings[0].RuleID)
+}
+
+func TestEvaluate_SupersedesOnlyOnFiredCallee(t *testing.T) {
+	raw := collector.RawProfile{
+		analyzer.RootName: entry(1, 9000, 8000, 0),
+		"main()==>hot":    entry(20, 100, 90, 0),
+		"main()==>cool":   entry(5, 100, 90, 0),
+	}
+
+	specific := rule("specific", rules.Match{CallCountThreshold: ptrThreshold(10)})
+	specific.Supersedes = []string{"generic"}
+	generic := rule("generic", rules.Match{CallCountThreshold: ptrThreshold(3)})
+
+	// specific tire sur "hot" (CT 20 ≥ 10) mais pas sur "cool" (CT 5 < 10) ;
+	// generic tire sur les deux → generic|cool survit, generic|hot est retiré.
+	findings, err := mustEngine(t, specific, generic).Evaluate(normalize(t, raw))
+	require.NoError(t, err)
+
+	keys := make([]string, 0, len(findings))
+	for _, f := range findings {
+		keys = append(keys, f.Key)
+	}
+	assert.Equal(t, []string{"specific|hot", "generic|cool"}, keys)
+}
+
+func TestEvaluate_SupersedesTransitive(t *testing.T) {
+	raw := collector.RawProfile{
+		analyzer.RootName: entry(1, 9000, 8000, 0),
+		"main()==>hot":    entry(20, 100, 90, 0),
+		"main()==>warm":   entry(6, 100, 90, 0),
+	}
+
+	top := rule("top", rules.Match{CallCountThreshold: ptrThreshold(10)})
+	top.Supersedes = []string{"middle", "sibling"}
+	middle := rule("middle", rules.Match{CallCountThreshold: ptrThreshold(3)})
+	middle.Supersedes = []string{"leaf"}
+	sibling := rule("sibling", rules.Match{CallCountThreshold: ptrThreshold(2)})
+	sibling.Supersedes = []string{"leaf"}
+	leaf := rule("leaf", rules.Match{CallCountThreshold: ptrThreshold(1)})
+
+	// Fermeture transitive : top → {middle, leaf, sibling, leaf}. Sur "hot",
+	// top remplace middle, sibling et leaf ; sur "warm" (top ne tire pas),
+	// middle et sibling remplacent leaf mais survivent eux-mêmes.
+	findings, err := mustEngine(t, top, middle, sibling, leaf).Evaluate(normalize(t, raw))
+	require.NoError(t, err)
+
+	keys := make([]string, 0, len(findings))
+	for _, f := range findings {
+		keys = append(keys, f.Key)
+	}
+	assert.Equal(t, []string{"top|hot", "middle|warm", "sibling|warm"}, keys)
+}
+
+func TestEvaluate_SupersedesComplementaryStays(t *testing.T) {
+	raw := collector.RawProfile{
+		analyzer.RootName:     entry(1, 9000, 8000, 0),
+		"main()==>PDO::query": entry(5, 100, 90, 0),
+	}
+
+	specific := rule("specific", rules.Match{
+		FunctionPattern:    `^PDO`,
+		CallCountThreshold: ptrThreshold(3),
+	})
+	specific.Supersedes = []string{"generic"}
+	complementary := rule("complementary", rules.Match{
+		FunctionPattern:    `^PDO`,
+		CallCountThreshold: ptrThreshold(3),
+	})
+	generic := rule("generic", rules.Match{
+		FunctionPattern:    `^PDO`,
+		CallCountThreshold: ptrThreshold(3),
+	})
+
+	// specific et complementary tirent sur le même callee avec des remèdes
+	// distincts : tous deux survivent, seule generic (remplacée) est retirée.
+	findings, err := mustEngine(t, specific, complementary, generic).Evaluate(normalize(t, raw))
+	require.NoError(t, err)
+
+	keys := make([]string, 0, len(findings))
+	for _, f := range findings {
+		keys = append(keys, f.Key)
+	}
+	assert.Equal(t, []string{"specific|PDO::query", "complementary|PDO::query"}, keys)
+}
+
 func TestEvaluate_NilGraph(t *testing.T) {
 	eng := mustEngine(t, rule("x", rules.Match{}))
 
@@ -373,7 +510,7 @@ func TestCatalogAgainstFixtures(t *testing.T) {
 				"n-plus-one-query|PDO::query",
 				"dominant-subtree|PDO::query",            // 88,9 % de la trace
 				"dominant-subtree|App\\Controller::list", // 97,8 %
-				"duplicated-calculation|PDO::query",
+				// duplicated-calculation|PDO::query est supersedé par n-plus-one-query.
 			},
 		},
 		{

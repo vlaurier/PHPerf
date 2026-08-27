@@ -54,6 +54,11 @@ type Rule struct {
 	Controllability Controllability `yaml:"controllability"`
 	Match           Match           `yaml:"match"`
 	Recommendation  string          `yaml:"recommendation"`
+	// Supersedes — ids de règles que cette règle remplace : quand elle tire
+	// sur un callee, les findings des règles supersedées sur ce même callee
+	// sont retirés (résolution transitive). À déclarer depuis la règle la
+	// plus spécifique vers celles qu'elle rend sans objet.
+	Supersedes []string `yaml:"supersedes,omitempty"`
 }
 
 // Match — critères de déclenchement de la règle. Au moins un critère est
